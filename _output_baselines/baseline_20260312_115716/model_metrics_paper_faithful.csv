@@ -1,0 +1,7 @@
+config,model,mae,rmse,r2,train_rows,test_rows,train_groups,test_groups,descriptor_preset,mod_encoding,split_mode
+paper_faithful,RF,18.259590655039435,22.118124363703,0.7362509600833675,732,69,39,4,calibrated_mixed,calibrated,sequential
+paper_faithful,GBDT,30.487811347920665,35.37284264448779,0.3254188204985866,732,69,39,4,calibrated_mixed,calibrated,sequential
+paper_faithful,XGB,20.017898822729137,24.644756765062,0.6725512261764823,732,69,39,4,calibrated_mixed,calibrated,sequential
+paper_faithful,LR,272.6757048393343,383.20283282887544,-78.16837267741805,732,69,39,4,calibrated_mixed,calibrated,sequential
+paper_faithful,KNN,29.480811225745274,36.29227508403336,0.2898948142889458,732,69,39,4,calibrated_mixed,calibrated,sequential
+paper_faithful,SVR,19.516860118806672,22.19705003892791,0.7343652928045811,732,69,39,4,calibrated_mixed,calibrated,sequential

@@ -1,0 +1,7 @@
+config,model,mae,rmse,r2,train_rows,test_rows,train_groups,test_groups,descriptor_preset,mod_encoding,split_mode
+score_matched,RF,19.058311280309795,25.523828788238042,0.7743648861231615,732,69,38,5,calibrated_mixed,calibrated,group_shuffle
+score_matched,GBDT,19.08681163276606,25.108574442609978,0.7816470050690122,732,69,38,5,calibrated_mixed,calibrated,group_shuffle
+score_matched,XGB,18.104238041863923,23.14909136119696,0.8143978772865412,732,69,38,5,calibrated_mixed,calibrated,group_shuffle
+score_matched,LR,24.22101548229732,33.90448361975088,0.6018659611844741,732,69,38,5,calibrated_mixed,calibrated,group_shuffle
+score_matched,KNN,27.881848511269517,43.33980840109915,0.3494375161571277,732,69,38,5,calibrated_mixed,calibrated,group_shuffle
+score_matched,SVR,14.959738621343842,21.819779809563084,0.8351018556735592,732,69,38,5,calibrated_mixed,calibrated,group_shuffle

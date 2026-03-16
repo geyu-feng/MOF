@@ -1,0 +1,152 @@
+{
+  "version": "fig4_refine_v1",
+  "dataset": {
+    "descriptor_preset": "calibrated_mixed",
+    "mod_encoding": "calibrated",
+    "group_recipe": "paper_43"
+  },
+  "model_selection": {
+    "use_cv_best": true,
+    "comparison_models": [],
+    "uncertainty_cv_splits": 10
+  },
+  "external_validation": {
+    "doi_level_splits": 5,
+    "material_family_level_splits": 5
+  },
+  "output": {
+    "directory": "outputs",
+    "canonical_stem": "fig4_best",
+    "report_name": "fig4_refine_report.md",
+    "png_dpi": 600,
+    "write_svg": true,
+    "write_pdf": true,
+    "write_versioned_copy": false,
+    "log_name": "fig4_refine.log"
+  },
+  "plot": {
+    "figure_size": [
+      6.9,
+      4.5
+    ],
+    "subplot": {
+      "left": 0.085,
+      "right": 0.985,
+      "top": 0.965,
+      "bottom": 0.105,
+      "wspace": 0.34,
+      "hspace": 0.34
+    },
+    "panel_letters": [
+      "(a)",
+      "(b)",
+      "(c)",
+      "(d)",
+      "(e)",
+      "(f)"
+    ],
+    "line_color": "#2F80ED",
+    "line_width": 1.15,
+    "rug_color": "#111111",
+    "rug_line_width": 0.65,
+    "rug_height_axes": 0.065,
+    "contourf_levels": 10,
+    "contour_levels": 6,
+    "contour_line_width": 0.45,
+    "contour_label_fontsize": 6,
+    "colormap": "YlGnBu_r",
+    "show_colorbar": false,
+    "facecolor": "#FFFFFF"
+  },
+  "panels": {
+    "ci_ad": {
+      "x_feature": "ci",
+      "y_feature": "ad",
+      "xlabel": "CI",
+      "ylabel": "AD",
+      "xlim": [
+        0.0,
+        1000.0
+      ],
+      "ylim": [
+        0.0,
+        2000.0
+      ],
+      "x_points": 40,
+      "y_points": 36,
+      "x_major_locator": 200.0,
+      "y_major_locator": 500.0
+    },
+    "ci": {
+      "xlabel": "CI",
+      "ylabel": "Partial dependence",
+      "xlim": [
+        0.0,
+        1000.0
+      ],
+      "n_points": 80,
+      "x_major_locator": 200.0,
+      "y_padding_fraction": 0.12,
+      "y_min_pad": 1.0
+    },
+    "ad": {
+      "xlabel": "AD",
+      "ylabel": "Partial dependence",
+      "xlim": [
+        0.0,
+        15000.0
+      ],
+      "n_points": 90,
+      "x_major_locator": 5000.0,
+      "y_padding_fraction": 0.12,
+      "y_min_pad": 0.8
+    },
+    "time": {
+      "xlabel": "Time",
+      "ylabel": "Partial dependence",
+      "xlim": [
+        0.0,
+        4000.0
+      ],
+      "n_points": 90,
+      "x_major_locator": 1000.0,
+      "y_padding_fraction": 0.12,
+      "y_min_pad": 0.8
+    },
+    "ph": {
+      "xlabel": "pH",
+      "ylabel": "Partial dependence",
+      "xlim": [
+        1.0,
+        12.0
+      ],
+      "n_points": 80,
+      "x_ticks": [
+        2.5,
+        5.0,
+        7.5,
+        10.0
+      ],
+      "y_padding_fraction": 0.12,
+      "y_min_pad": 0.8
+    },
+    "temp": {
+      "xlabel": "Tem",
+      "ylabel": "Partial dependence",
+      "xlim": [
+        295.0,
+        340.0
+      ],
+      "n_points": 80,
+      "x_ticks": [
+        300.0,
+        310.0,
+        320.0,
+        330.0,
+        340.0
+      ],
+      "y_padding_fraction": 0.12,
+      "y_min_pad": 0.2
+    }
+  }
+}

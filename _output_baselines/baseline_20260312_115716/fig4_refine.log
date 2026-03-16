@@ -1,0 +1,60 @@
+2026-03-11 14:34:11,225 [INFO] fig4_refine: Starting Fig. 4 refinement with config C:\Users\geyuf\Desktop\13\config\fig4_config.json.
+2026-03-11 14:34:11,928 [INFO] fig4_refine: Loaded training table with 801 rows for Fig. 4 refinement.
+2026-03-11 14:47:57,168 [INFO] fig4_refine: CV best model for Fig. 4 is GBDT with params {'learning_rate': 0.1, 'max_depth': 5, 'min_samples_leaf': 2, 'n_estimators': 150}.
+2026-03-11 14:48:51,389 [INFO] fig4_refine: Fitted uncertainty ensemble fold 1/10 for GBDT.
+2026-03-11 14:49:12,360 [INFO] fig4_refine: Fitted uncertainty ensemble fold 2/10 for GBDT.
+2026-03-11 14:50:36,748 [INFO] fig4_refine: Fitted uncertainty ensemble fold 3/10 for GBDT.
+2026-03-11 14:50:58,372 [INFO] fig4_refine: Fitted uncertainty ensemble fold 4/10 for GBDT.
+2026-03-11 14:51:18,654 [INFO] fig4_refine: Fitted uncertainty ensemble fold 5/10 for GBDT.
+2026-03-11 14:51:51,316 [INFO] fig4_refine: Fitted uncertainty ensemble fold 6/10 for GBDT.
+2026-03-11 14:52:22,667 [INFO] fig4_refine: Fitted uncertainty ensemble fold 7/10 for GBDT.
+2026-03-11 14:53:28,828 [INFO] fig4_refine: Fitted uncertainty ensemble fold 8/10 for GBDT.
+2026-03-11 14:53:54,210 [INFO] fig4_refine: Fitted uncertainty ensemble fold 9/10 for GBDT.
+2026-03-11 14:55:06,194 [INFO] fig4_refine: Fitted uncertainty ensemble fold 10/10 for GBDT.
+2026-03-11 14:57:33,791 [INFO] fig4_refine: Fitted uncertainty ensemble fold 1/10 for RF.
+2026-03-11 14:57:55,607 [INFO] fig4_refine: Fitted uncertainty ensemble fold 2/10 for RF.
+2026-03-11 14:59:08,604 [INFO] fig4_refine: Fitted uncertainty ensemble fold 3/10 for RF.
+2026-03-11 14:59:30,600 [INFO] fig4_refine: Fitted uncertainty ensemble fold 4/10 for RF.
+2026-03-11 14:59:53,077 [INFO] fig4_refine: Fitted uncertainty ensemble fold 5/10 for RF.
+2026-03-11 15:00:26,353 [INFO] fig4_refine: Fitted uncertainty ensemble fold 6/10 for RF.
+2026-03-11 15:01:00,002 [INFO] fig4_refine: Fitted uncertainty ensemble fold 7/10 for RF.
+2026-03-11 15:02:10,511 [INFO] fig4_refine: Fitted uncertainty ensemble fold 8/10 for RF.
+2026-03-11 15:02:36,335 [INFO] fig4_refine: Fitted uncertainty ensemble fold 9/10 for RF.
+2026-03-11 15:03:43,226 [INFO] fig4_refine: Fitted uncertainty ensemble fold 10/10 for RF.
+2026-03-11 15:18:35,712 [INFO] fig4_refine: Fitted uncertainty ensemble fold 1/10 for XGB.
+2026-03-11 15:18:56,365 [INFO] fig4_refine: Fitted uncertainty ensemble fold 2/10 for XGB.
+2026-03-11 15:20:08,672 [INFO] fig4_refine: Fitted uncertainty ensemble fold 3/10 for XGB.
+2026-03-11 15:20:32,935 [INFO] fig4_refine: Fitted uncertainty ensemble fold 4/10 for XGB.
+2026-03-11 15:20:57,727 [INFO] fig4_refine: Fitted uncertainty ensemble fold 5/10 for XGB.
+2026-03-11 15:21:42,441 [INFO] fig4_refine: Fitted uncertainty ensemble fold 6/10 for XGB.
+2026-03-11 15:22:15,745 [INFO] fig4_refine: Fitted uncertainty ensemble fold 7/10 for XGB.
+2026-03-11 15:23:25,063 [INFO] fig4_refine: Fitted uncertainty ensemble fold 8/10 for XGB.
+2026-03-11 15:23:45,566 [INFO] fig4_refine: Fitted uncertainty ensemble fold 9/10 for XGB.
+2026-03-11 15:24:43,548 [INFO] fig4_refine: Fitted uncertainty ensemble fold 10/10 for XGB.
+2026-03-11 15:34:37,342 [INFO] fig4_refine: Starting Fig. 4 refinement with config C:\Users\geyuf\Desktop\13\config\fig4_config.json.
+2026-03-11 15:34:37,925 [INFO] fig4_refine: Loaded training table with 801 rows for Fig. 4 refinement.
+2026-03-11 15:34:53,174 [INFO] fig4_refine: Reused existing model-selection CSV outputs for Fig. 4 refinement.
+2026-03-11 15:34:53,971 [INFO] fig4_refine: CV best model for Fig. 4 is GBDT with params {'learning_rate': 0.1, 'max_depth': 5, 'min_samples_leaf': 2, 'n_estimators': 150}.
+2026-03-11 15:34:53,985 [INFO] fig4_refine: Reused cached Fig. 4 best bundle outputs.
+2026-03-11 15:34:53,987 [INFO] fig4_refine: Reused cached RF bundle outputs.
+2026-03-11 15:34:53,990 [INFO] fig4_refine: Reused cached XGB bundle outputs.
+2026-03-11 15:42:06,224 [INFO] fig4_refine: Finished Fig. 4 refinement outputs in C:\Users\geyuf\Desktop\13\outputs.
+2026-03-11 15:50:32,071 [INFO] fig4_refine: Finished Fig. 4 refinement outputs in C:\Users\geyuf\Desktop\13\outputs.
+2026-03-11 15:54:47,723 [INFO] fig4_refine: Starting Fig. 4 refinement with config C:\Users\geyuf\Desktop\13\config\fig4_config.json.
+2026-03-11 15:54:48,357 [INFO] fig4_refine: Loaded training table with 801 rows for Fig. 4 refinement.
+2026-03-11 15:55:07,677 [INFO] fig4_refine: Reused existing model-selection CSV outputs for Fig. 4 refinement.
+2026-03-11 15:55:08,556 [INFO] fig4_refine: CV best model for Fig. 4 is GBDT with params {'learning_rate': 0.1, 'max_depth': 5, 'min_samples_leaf': 2, 'n_estimators': 150}.
+2026-03-11 15:55:08,565 [INFO] fig4_refine: Reused cached Fig. 4 best bundle outputs.
+2026-03-11 15:55:08,567 [INFO] fig4_refine: Reused cached RF bundle outputs.
+2026-03-11 15:55:08,569 [INFO] fig4_refine: Reused cached XGB bundle outputs.
+2026-03-11 15:55:08,578 [INFO] fig4_refine: Reused cached external-validation outputs.
+2026-03-11 15:55:08,580 [INFO] fig4_refine: Finished Fig. 4 refinement outputs in C:\Users\geyuf\Desktop\13\outputs.
+2026-03-11 16:26:08,074 [INFO] fig4_refine: Starting Fig. 4 refinement with config C:\Users\geyuf\Desktop\13\config\fig4_config.json.
+2026-03-11 16:26:08,847 [INFO] fig4_refine: Loaded training table with 801 rows for Fig. 4 refinement.
+2026-03-11 16:26:27,729 [INFO] fig4_refine: Reused existing model-selection CSV outputs for Fig. 4 refinement.
+2026-03-11 16:26:28,410 [INFO] fig4_refine: CV best model for Fig. 4 is GBDT with params {'learning_rate': 0.1, 'max_depth': 5, 'min_samples_leaf': 2, 'n_estimators': 150}.
+2026-03-11 16:26:28,418 [INFO] fig4_refine: Reused cached Fig. 4 best bundle outputs.
+2026-03-11 16:26:28,420 [INFO] fig4_refine: Reused cached RF bundle outputs.
+2026-03-11 16:26:28,421 [INFO] fig4_refine: Reused cached XGB bundle outputs.
+2026-03-11 16:26:28,425 [INFO] fig4_refine: Reused cached external-validation outputs.
+2026-03-11 16:26:28,427 [INFO] fig4_refine: Finished Fig. 4 refinement outputs in C:\Users\geyuf\Desktop\13\outputs.

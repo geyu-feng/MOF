@@ -1,0 +1,963 @@
+Journal of Colloid and Interface Science 662 (2024) 836–845
+Available online 14 February 2024
+0021-9797/© 2024 Elsevier Inc. All rights reserved.
+Regular Article 
+Machine-learning-driven discovery of metal – organic framework adsorbents 
+for hexavalent chromium removal from aqueous environments 
+Mingxing Jiang
+a
+, Weiwei Fu
+b
+, Ying Wang
+c
+, Duanping Xu
+a
+, Sitan Wang
+a , * 
+a
+College of Environmental Science and Engineering, Liaoning Technical University, Fuxin 123000, PR China 
+b
+School of Information Engineering, Dalian Ocean University, Dalian 116023, PR China 
+c
+School of Chemical Equipment, Shenyang University of Technology, Liaoyang 111000, PR China   
+GRAPHICAL ABSTRACT  
+ARTICLE INFO  
+Keywords: 
+Cr(VI) removal from solution 
+Adsorption 
+Metal-organic frameworks 
+Machine learning 
+Material screening 
+Prediction model 
+ABSTRACT  
+Hypothesis: Metal-organic frameworks (MOFs) have been widely studied for Cr(VI) adsorption in water. Theo -
+retically, numerous MOFs can be synthesised by assembling diverse metals and ligands. However, the traditional 
+manual experimentation for screening high-performance MOFs is resource-intensive and inefficient. 
+Experiments: A screening strategy for MOFs based on machine learning was proposed for the adsorption and 
+removal of Cr(VI) from water. By collecting the characteristics of MOFs and the experimental parameters of Cr 
+(VI) adsorption from the literature, a dataset was constructed to predict the adsorption performance. Among the 
+six regression models, the model trained by the extreme gradient boosted tree algorithm had the best perfor -
+mance and was used to simulate the adsorption and screen potential high-performance adsorbents. 
+Findings: Structure-property analysis indicated that prepared MOF adsorbents with properties of 0.37 < largest 
+cavity diameter < 0.71 nm, 0.18 < pore volume < 0.57 cm
+3
+/g, 412 < specific surface area < 1588 m
+2
+/g, 0.43 <
+void fraction < 0.62 will achieve enhanced adsorption of Cr(VI) in water. High-performance adsorbents were 
+successfully screened using a combination of machine-learning prediction and analysis. Experiments were con -
+ducted to verify the exceptional adsorption capacity of UiO-66 and MOF-801. This method effectively identified 
+Abbreviations: MOFs, Metal-Organic Frameworks; XGB, Extreme Gradient Boosted Tree; LCD, Largest Cavity Diameter; VF, Void Fraction; MT, Coordination 
+Metal; ModM, Modification Methods; SA, Specific Surface Area; PD, Pore Diameter; PV, Pore Volume; CI, Initial Concentration; AD, Adsorbent Dose; Time, Reaction 
+Time; Tem, Reaction Temperature. 
+* Corresponding author. 
+E-mail address: wangsitan@lntu.edu.cn (S. Wang).  
+Contents lists available at ScienceDirect 
+Journal of Colloid And Interface Science 
+journal homep age: www.elsevi er.com/loc ate/jcis 
+https://doi.org/10.1016/j.jcis.2024.02.084 
+Received 23 October 2023; Received in revised form 7 February 2024; Accepted 8 February 2024   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+837
+adsorbents and accelerated the development of new MOF adsorbents for contaminant removal, providing a novel 
+approach for the discovery of superior adsorbents.   
+1. Introduction 
+Environmental pollution problems caused by the high toxicity of 
+heavy metal ions in aqueous environments have drawn widespread 
+attention [1,2]. Cr(VI) has strong carcinogenic properties and intense 
+toxicity; it is pervasive in the environment and easily migrates and ac -
+cumulates in living organisms. Therefore, effective removal technolo -
+gies are highly sought after [3,4]. Currently, there are several 
+approaches for the removal of Cr(VI) from aqueous media, including ion 
+exchange, biological treatment, chemical reduction, precipitation, 
+electrolysis and adsorption [5]. Adsorption is an effective, simple, and 
+environmentally friendly method. Activated carbon, chitosan, and other 
+resins are widely used for this purpose. However, activated carbon has 
+drawbacks such as poor reproducibility, high processing costs, and 
+limited application range [6]. Chitosan, on the other hand, is unstable 
+and easily dissolves in acidic water [7,8]. Thus, the development of 
+highly efficient adsorbents is particularly important in adsorption 
+technology. 
+Metal-organic frameworks (MOFs) are periodic reticulated structures 
+composed of coordination metals and organic ligands that have poten -
+tial as adsorbents because of their tunable structures, large specific 
+surface areas (SA), high porosities, and controllable functions [9]. Over 
+the past decade, tens of thousands of MOFs have been synthesised and 
+applied to gas adsorption and separation [10]. Studies on the adsorption 
+of toxic pollutants such as antibiotics and heavy metals in water using 
+MOFs have also been conducted but are in the early stages [1,11–13]. 
+Theoretically, an infinite number of MOFs can be synthesised by 
+assembling different metals and organic ligands. However, relying on 
+extensive manual experiments to explore high-performance MOFs is a 
+resource-intensive and inefficient trial-and-error process. Thus, a 
+screening strategy to rapidly predict the adsorption performance of 
+MOFs could have applications for screening superior adsorbents based 
+on large databases of MOFs [14–16]. 
+Data-driven machine learning (ML) is less dependent on prior 
+knowledge than traditional programming methods and has the advan -
+tages of a low computational cost and powerful predictive capability, 
+demonstrating a promising future for solving complex environmental 
+data issues [17]. In recent years, ML has shown significant potential for 
+screening functional materials [18–23], predicting gas adsorption [24], 
+exploring adsorption mechanisms, and simulating pollutant removal 
+[25–30]. Nguyen et al. developed a ML model for predicting the equi -
+librium adsorption capacity of biochar for drugs and explored the 
+adsorption mechanism using literature data [25]. Molecular simulations 
+combined with ML have become the new paradigm for discovering high- 
+performance gas adsorbents through porous material screening. 
+Recently, Wang et al. used an ML algorithm to explore the pattern of 
+MOFs capturing chemical warfare agents from the air to assist in the 
+screening of excellent MOFs [31]. However, the application of ML in 
+adsorption is still in its infancy. In particular, a research gap remains in 
+adsorbent screening for the removal of pollutants from water. It is 
+difficult to obtain high-quality experimental data for ML modelling 
+because of the scarcity of a direct database of sorption experiments that 
+can be used for ML, which is the greatest obstacle to its development. 
+In this study, an adsorbent screening strategy was proposed for the 
+adsorptive removal of Cr(VI) from water. A purely data-driven ML 
+approach was used to predict the adsorption performance using the 
+characteristics of the MOFs and the experimental parameters of Cr(VI) 
+adsorption as data sources. Six regression models were trained and 
+evaluated, including random forest (RF) [32], gradient boosting deci -
+sion tree (GBDT) [33], extreme gradient boosting tree (XGB) [34], 
+support vector regression (SVR) [35], linear regression (LR), and K- 
+nearest neighbour (KNN) [36,37]. The optimal model was used to 
+simulate the adsorption of Cr(VI) by the MOFs based on valid experi -
+mental parameters and the adsorption capacity was output. Potential 
+high-performance adsorbents were screened using a combination of ML 
+prediction and analysis. The feature importance and partial dependence 
+plots (PDP) of the ML method were used to explain how the features 
+affect the adsorption capacity and the degree of influence. The complete 
+workflow for screening the MOF adsorbents is shown in Fig. 1. These 
+results can accelerate the development of novel MOF adsorbents and 
+serve as a reference for the rapid screening of high-performance MOFs 
+for various operating scenarios in the future. 
+2. Data and methods 
+2.1. Data collection and pre-processing 
+The data used in the ML process were mainly from peer-reviewed 
+publications (2014–2021, Elsevier, RSC – Royal Society of Chemistry, 
+ACS publications) and 801 data points covering Cr(VI) onto 43 MOFs 
+were extracted. During the process of literature selection, we excluded 
+studies with unknown sources or significant missing data. With the 
+adsorption capacity (Q; mg/g) as the prediction target, the collected 
+data were broadly classified into two categories: adsorbent properties, 
+including coordination metal (MT), modification method (ModM), SA 
+(m
+2
+/g), pore diameter (PD; nm), and pore volume (PV; cm
+3
+/g), and 
+experimental parameters, including initial concentration (CI; mg/L), 
+adsorbent dose (AD; mg/L), reaction time (Time; min), pH, and reaction 
+temperature (Tem; K). Because all data were manually collected from 
+independent research literature without uniform standards and reli -
+ability assessments, two assumptions were made during the process of 
+establishing the dataset: (1) all experimental data obtained from the 
+literature sources could be objectively accepted and (2) the impact of 
+data errors caused by experimental processes and data collection in each 
+study on ML outcomes could be neglected. All data points were collected 
+directly from graphs or text in the literature. Representative samples 
+were given priority and duplicate samples were retrieved and eliminated 
+from the entire dataset. For samples with a high number of missing 
+values, selective elimination was performed. The inconformity of aper -
+ture data across publications may be detrimental to ML modelling. The 
+theoretical mean PD (MPD; nm) was uniformly calculated and used as a 
+feature. This approach can be understood as feature augmentation from 
+a ML perspective. In addition, four quantitative variables, ionic charge 
+(IC), atomic radius (AR), polarisability (Pol), and electronegativity (Ele), 
+were used instead of the qualitative variable MT in the final dataset to 
+benefit ML modelling. 
+The dataset was organised into 801 rows and 12 columns. To miti -
+gate the risk of data leakage during the ML process, the data were 
+divided into 43 groups based on the MOFs and arranged in sequential 
+order. The missing pH and Tem values were assumed to be 7 and 298 K, 
+respectively. Partially missing values for the four variables were as fol -
+lows: PD (16.2 %), PV (14.2 %), SA (6.7 %), and CI (0.3 %). The RF 
+algorithm was used to interpolate the data and fill in the missing data. 
+Dimensional differences in the quantitative variables may negatively 
+affect the predictive performance of the model. To accommodate ML 
+modelling, the quantitative variables were standardised before training. 
+In addition, qualitative variables were labelled and encoded in advance. 
+2.2. Statistical distribution and feature analysis 
+2.2.1. Statistical distribution 
+In the ML application, 11 features were used for the model training: 
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+838
+MT, ModM, SA, MPD, PD, PV, CI, AD, Time, pH, and Tem. Adsorption 
+capacity (Q) was the prediction target. The statistical distributions of the 
+11 features used for modelling the dataset are listed in Table S1 and 
+Figs. S1 and S2 . 
+2.2.2. Correlation analysis 
+The Pearson correlation coefficient matrix for the quantitative vari -
+ables in the dataset is presented in Fig. S3 . There was an extremely 
+significant correlation between the SA of the adsorbent and the PV (p <
+0.01). Considering that SA and PV are important structural parameters 
+of MOF, no exclusion operation was performed on any feature during 
+model training. 
+2.2.3. Feature importance 
+The importance of each feature was calculated and ranked using the 
+RF algorithm to evaluate its contribution to the adsorbed capacity. This 
+method quantifies the impact of each feature on the forecasted results as 
+a percentage and assesses the magnitude of the overall performance loss 
+of the model after removing that feature [38] . 
+2.3. Modelling and evaluation 
+The dataset was divided into training and test sets and a prediction 
+model was built using the RF algorithm. As shown in Fig. S4 , the pre -
+diction performance of the model improves as the percentage of the 
+training set increases from 20 % to 90 %. The learning ability of the 
+model for the relationship between features and adsorption capacity was 
+positively correlated with the predictive performance. Therefore, a 
+training set that included 90 % of the data was built to train the model 
+and tune its hyperparameters. A test set that included 10 % of the data 
+was used to evaluate the model prediction performance. Different types 
+of ML algorithms have fixed hyperparameters and tuning their impor -
+tant hyperparameters to the optimum is the key to improve the model 
+prediction performance. In the hyperparameters tuning process, the 
+optimal hyperparameter combination was determined using the grid 
+search method and 10-fold cross-validation after the parameter space of 
+the model was determined [39,40] . The specific hyperparameter tuning 
+process is described in the Text S1. In this way, an optimized prediction 
+model is obtained. The test set was used to predict the adsorption ca -
+pacity. The coefficient of determination ( R
+2
+) was calculated to evaluate 
+the model performance and the mean absolute error (MAE) and root 
+mean square error (RMSE) were applied to assess the model prediction 
+accuracy. 
+Six ML regression algorithms were utilised in this study to develop 
+prediction models, including RF based on the bagging method, GBDT 
+based on boosting, XGB, LR, KNN, and SVR with nonlinear kernel 
+functions. After training, a comprehensive comparison of the perfor -
+mance metrics among the six models, particularly R
+2
+, was conducted to 
+select the high-performance models for simulating the adsorption ex -
+periments. All the data processing and ML methods described here were 
+performed in the Python programming language (version 3.8) using the 
+open-source scikit-learn library [41] . 
+2.4. Simulation of Cr(VI) adsorption by MOFs 
+2.4.1. Determination of experimental parameters 
+To facilitate the screening of adsorbents for Cr(VI) in water through 
+simulation of adsorption by MOFs, it is necessary to determine effective 
+experimental parameters in advance. A PDP was used to visualise how 
+the experimental parameters affected the adsorption capacity. The PDP 
+retained one or two target features as well as other marginalised fea -
+tures. A sensitivity analysis of the target features was provided by PDP 
+[42] . 
+2.4.2. Establishment of a data set of MOFs 
+A commercially available experimental metal – organic framework 
+Fig. 1. Workflow for MOF adsorbent screening.  
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+839
+(CoRE MOF 2019) was used as the MOF data source. This comprehen -
+sive database contains 12,020 structurally diverse MOFs and provides a 
+complete dataset of structural information that can be directly used for 
+simulation calculations. Based on the CoRE MOF, high-throughput 
+screening of a large number of MOF structures was implemented to 
+find a subset of potentially promising structures and mine potential 
+high-performance materials in detail [43] . Most metal MOFs, except for 
+Zr-based MOFs, are generally unstable in aqueous solutions, especially 
+in acidic (or basic) solutions. Therefore, only a few MOFs based on metal 
+ions such as Zr, Cr, Zn, Fe, Cu, Co, and Ag have been applied to the study 
+on the removal of Cr(VI) from water by adsorption [11] . Consequently, 
+3833 structural data points for MOF based on seven coordination metals 
+were extracted from the CoRE MOF database. Among these were 103 Zr- 
+based MOFs, 1581 Zn-based MOFs, 172 Fe-based MOFs, 1167 Cu-based 
+MOFs, 564 Co-based MOFs, 229 Ag-based MOFs, and 17 Cr-based MOFs. 
+Five features of the MOFs database in agreement with the training set 
+were incorporated: MT, accessible SA, theoretical MPD, largest cavity 
+diameter (LCD), and accessible PV. Considering the strong positive 
+correlation between the LCD and dominant pore diameter in the MOF 
+structure dataset established by Gülsoy et al., with a correlation coeffi -
+cient of 0.99, the difference between the average values of the LCD and 
+dominant pore diameter is less than 0.036 nm, with an error in a very 
+small range [24] . Therefore, the LCD was used as the PD characteristic in 
+the simulated adsorption experiments. Fig. 2 (a) shows the structural 
+relationships between SA, PD, and PV in the MOF dataset. 
+2.4.3. Formulating simulation strategy 
+Model fusion strategies have frequently been used to improve 
+prediction accuracy because of the limitations of single models [44,45] . 
+Moreover, owing to the limited data volume, the performance of the 
+trained models may not be exceptionally robust. To further optimise the 
+adsorbent screening, a multiple model combination strategy was used to 
+simulate the adsorption experiments by connecting the first and second 
+models in series for performance evaluation. First, under the determined 
+experimental parameters, the best-performing model was employed to 
+simulate the adsorption of Cr(VI) in water by the 3833 MOFs. The 
+resulting adsorption capacity is referred to as the first adsorption data -
+set, from which a subset of MOFs with higher adsorption capacities was 
+selected. Subsequently, this subset of MOFs was used as the input for the 
+second-best-performing model to further simulate the adsorption ex -
+periments and the obtained adsorption capacity was designated as the 
+second adsorption dataset. 
+2.5. Screening and analysis of adsorbents 
+2.5.1. Structure-property relationship of MOFs 
+The relationships between the adsorption data of the 3833 MOFs 
+simulated by the first model and the geometric characteristics of the 
+MOFs were visualised using univariate analysis. These relationships can 
+provide valuable insights into the evolution of novel MOFs, facilitate the 
+expedited experimental synthesis of new MOF adsorbents and serve as a 
+crucial reference for large-scale screening of MOFs aimed at the removal 
+of water pollutants [46] . 
+2.5.2. Initial screening of adsorbents 
+As shown in Fig. 2 (b), based on the first adsorption dataset, the 
+Fig. 2. (a) Relationship between structural data of MOFs; (b) adsorbent screening; and (c) feature importance.  
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+840
+predicted adsorption capacity was used as the ranking criterion. 
+Considering the classification of the coordination metals, the top ten 
+MOFs were selected for each type. Only one representative MOF was 
+selected for MOFs within the same series with similar structures. Sub -
+sequently, considering the adsorption capacity and data distribution of 
+the 70 MOFs toward Cr(VI) in water, based on the second adsorption 
+dataset, the predicted adsorption capacity was ranked, and ultimately, 
+20 adsorbents were selected. 
+2.5.3. Adsorbent fine screen 
+However, in addition to possessing high adsorption capacity for Cr 
+(VI) in water, they must also exhibit ideal stability as adsorbents. The 
+Cambridge Crystallographic Data Centre (CCDC) provides comprehen -
+sive information on MOFs, including constituent ingredients, structural 
+information, and relevant publications which facilitates further analysis 
+of material properties. 
+For MOFs as adsorbent materials, high stability is essential to ensure 
+the efficient removal of pollutants from water. Many researchers have 
+proposed performance indicators for evaluating the stability of adsor -
+bent materials, such as MOFs, including their stability after solvent 
+removal, stability in aqueous solutions, and thermal stability [47,48] . 
+The strength of the coordination bonds between the metal ions and 
+organic ligands is a crucial factor affecting the stability of MOFs. Ac -
+cording to the soft and hard acid-base theory, MOFs synthesised from 
+hard acid metal ions and hard base ligands, as well as soft acid metal ions 
+and soft base ligands, tend to exhibit higher stability in aqueous solu -
+tions [49] . Nandy et al. collected data from the literature to create a 
+dataset on the stability of MOFs for ML modelling. They tested the 
+performance of the model and accurately predicted the post-solvent 
+removal stability and the thermal stability of MOFs, showing an accu -
+racy of 78 % and MAE of 55 
+◦
+C, respectively. The accuracy rate of MOFs 
+classified as stable was even higher at 90 %. The reliability of the tool 
+was independently validated using 10 MOFs, and the validation results 
+are consistent with conclusions in the literature. They developed a 
+predictive tool called MOFSimplify, which is available on a web inter -
+face and allows users to make stability predictions for new MOFs based 
+on the stability data. We utilised this tool to predict the post-solvent 
+removal stability and thermal stability of MOFs, aiming to offer a 
+reference for the stability analysis of adsorbents [50] . 
+3. Results and discussion 
+3.1. Feature importance 
+The contribution of each feature to adsorption capacity was deter -
+mined using the RF algorithm. Fig. 2 (c) illustrates that the CI of Cr(VI) in 
+the solution exhibited a significant influence, contributing 28 % of the 
+overall contribution. This finding is consistent with those of a previous 
+study [25] . This is because the heightened gradients of Cr(VI) could 
+surpass the mass transfer resistance from the aqueous phase to the solid 
+adsorbent, thus promoting both the adsorption kinetics of the pollutants 
+on the adsorbent surface and the subsequent pore diffusion at the later 
+stage [51] . The feature importance ranking of pH was fourth, making it 
+the second-most influential experimental parameter after CI in terms of 
+adsorption capacity. This can be attributed to the alteration of the MOFs ’ 
+charge characteristics caused by varying the pH values, which conse -
+quently affects the adsorption capacity for hexavalent chromium ions. In 
+this study, it was crucial to establish effective experimental parameters 
+before conducting the adsorption experiments. The ranking of impor -
+tance of these parameters was as follows: CI > pH > AD > Time > Tem 
+and the ranking of feature importance with respect to the adsorbent 
+properties was MPD > ModM > PD > MT > PV > SA. MPD has the 
+greatest influence on the adsorption capacity because the calculation of 
+MPD is related to both the SA and PV of MOFs and, to some extent, 
+encompasses the contribution of SA and PD. 
+Notably, ModM had a remarkable effect on the adsorption capacity, 
+with a contribution of 15 %. The modification of the pristine MOFs 
+effectively boosted the adsorption of Cr(VI) in water. Recently, re -
+searchers have introduced specific functional groups into MOFs to 
+improve their adsorption of target pollutants. The dataset was divided 
+into two parts: unmodified MOFs (4 1 6) and modified MOFs (3 8 5). The 
+RF algorithm was employed to perform independent hyperparameter 
+tuning on various datasets and train the models separately using the best 
+hyperparameters to evaluate model performance. The results revealed 
+that the MAE and RMSE of the former were 16.18 and 25.08, whereas 
+those of the latter were 45.54 and 57.62, respectively. Regarding the 
+modified MOFs, there were differences in the functional groups intro -
+duced, modification methods, and parameters across different studies. 
+Thus, the performance of the final trained model was influenced to some 
+extent. Therefore, the final data used for screening did not include 
+modification parameters and relied solely on the structural character -
+istics of the MOF library to screen for superior MOF adsorbents. 
+3.2. Model selection 
+Based on the six ML algorithms, the model parameters were tuned to 
+their optimal values and subsequently trained. Subsequently, the per -
+formances of each model were evaluated and compared. The optimal 
+parameters of each model, MAE, RMSE, and R
+2 
+predicted for the test 
+dataset, are listed in Table S2 . The fitting effects of the six models are 
+shown in Fig. 3 . Smaller MAE and RMSE values indicate higher model 
+prediction accuracy and a larger R
+2 
+value indicates better model fitting. 
+By comparing the performance metrics of the six models, it can be 
+concluded that tree-based ensemble learning algorithms, such as RF, 
+GBDT, and XGB, can effectively capture the relationship between the 
+features and adsorption capacity. However, only the RF and XGB models 
+exhibited satisfactory performance, with R
+2 
+values of 0.67 and 0.81, 
+respectively. The XGB model exhibited the best performance, with an 
+MAE of 13.66 and RMSE of 15.86. The optimal hyperparameter com -
+binations were n_estimators = 250, max_depth = 15, min_child_weight 
+= 7, gamma = 0.1, subsample = 0.8, colsample_bytree = 0.9, and 
+learning_rate = 0.01. The RF and XGB models were explained using the 
+Shapley Additive exPlanations tool ( Figs. S5 and S6 ) [52,53] . The co -
+efficients of determination of the other four models were either unsat -
+isfactory or low. For example, the LR algorithm performed the worst, 
+with an R
+2 
+of   52.67, MAE of 205.2, and RMSE of 299.6. This was 
+because LR is considered a relatively simplistic algorithm because of its 
+sensitivity to outliers and inability to capture complex relationships in 
+high-dimensional feature data [54] . 
+In this study, the XGB model obtained from training was used as the 
+first model for the simulated adsorption experiments and the RF model 
+was used as the second model. Because the XGB model originates from 
+the boosting concept, it can effectively reduce bias. The bagging-based 
+RF model can effectively reduce variance. The XGB and RF models 
+ranked as the top two in terms of performance. Combining them can 
+complement each other and improve the excellence of the screened 
+MOFs. For a detailed discussion of the specific functions of XGB and RF, 
+please refer to Text S2 in the Supplementary Material . 
+3.3. Determining experimental parameters 
+As illustrated in Fig. 4 , the combined influence of the CI of Cr(VI) and 
+AD had a significant impact on the adsorption capacity. To fully explore 
+the adsorption performance of MOFs when predicting the saturation 
+adsorption capacity of MOFs for Cr(VI) in water, it is essential to in -
+crease the ratio of the Cr(VI) concentration to the adsorbent dosage, 
+with pollutant concentrations exceeding 300 mg/L. Within 300 min, the 
+reaction time had a significant effect on the adsorption capacity. As the 
+reaction time increased, the adsorption capacity gradually decreased 
+and reached a stable state. The adsorption equilibrium for most 
+adsorption processes was reached within 12 h. The impact of pH on the 
+adsorption capacity under acidic conditions was significant; however, 
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+841
+many MOFs are unstable in acidic aqueous solutions. The effect of Tem 
+on the adsorption capacity was not pronounced. Therefore, to support 
+the adsorbent screening, a simulation experiment of MOFs adsorbing Cr 
+(VI) in water was conducted under the following experimental param -
+eters: CI (300 mg/L), AD (500 mg/L), Time (720 min), pH (7), and Tem 
+(298 K). 
+3.4. Structure-Property relationship of MOFs 
+The correlation between the adsorption capacity predicted by the 
+XGB model and the structural characteristics of the MOFs is shown in 
+Fig. 5 . The results show that the model effectively learned the rela -
+tionship between the adsorption capacity and structural characteristics, 
+Fig. 3. Fitting effect diagram of six machine learning models.  
+Fig. 4. PDP of experimental parameters, the blue line indicates the model ’ s response to changes in the feature, and the black bars below each plot are used to display 
+the density of the distribution of data values. (For interpretation of the references to colour in this figure legend, the reader is referred to the web version of 
+this article.) 
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+842
+including the void fraction (VF). Consequently, the optimal structural 
+range of MOFs for achieving a high adsorption capacity for Cr(VI) in 
+water was identified. Thus, the preparation of MOF adsorbents with 
+0.37 < LCD < 0.71 nm, 0.18 < PV < 0.57 cm
+3
+/g, 412 < SA < 1588 m
+2
+/g, 
+and 0.43 < VF < 0.62 will have enhanced Cr(VI) adsorption capacity in 
+water. These findings will expedite the experimental design of novel 
+MOF adsorbents. Dichromate (Cr
+2
+O
+7
+2  
+) with a size of ca. 0.6 × 0.39 nm
+2 
+is the main form of hexavalent chromium in water [55] . The Cr(VI) 
+concentration is below the acceptable limit for the drinking water 
+standard (100 µ g/L by the U.S. Environmental Protection Agency). 
+3.5. Screening of adsorbents 
+According to the established screening procedure, a hierarchical 
+screening of 3833 MOFs was conducted based on the predicted 
+adsorption capacity. This study prioritised the predicted data from the 
+XGB model to select the top 10 MOFs (out of 70) for each class of co -
+ordination metal MOFs from a total of 3833 MOFs. The 70 MOFs were 
+then reranked based on the predicted data from the RF model to make 
+further selections according to the classification of coordination metals. 
+During the MOF selection process, preference was given to Zn- and Cu- 
+based MOFs that were highly abundant in the dataset, as well as to Zr- 
+based MOFs known for their superior stability. Ultimately, 20 MOFs 
+stood out and are listed in Tables S3 and S4 . From the model itself, the 
+screened 20 MOFs possess high Cr(VI) adsorption capacity in water. 
+However, further analysis and screening are necessary to assess the 
+feasibility of MOFs as adsorbents for the removal of pollutants from 
+water. For this purpose, information regarding the composition, struc -
+ture, and relevant literature for MOFs were collected and their stability 
+and thermal stability after solvent removal were predicted. To establish 
+a reference for further screening, the structure-adsorption capacity re -
+lationships of the 20 MOFs were ranked. Because of the different coor -
+dination metal types, the coordination metal information was 
+normalised. The purpose of this normalization was to shield the poten -
+tial influence of coordination metals on the adsorption performance. By 
+setting the coordination metal feature to a uniform value, any variation 
+in its effect on the predicted adsorption capacity among different MOFs 
+was eliminated. This approach enables a more accurate comparison and 
+evaluation of other structural features related to adsorption capacity 
+among the MOFs. The XGB model was used to predict the adsorption 
+capacity under the determined experimental parameters and was ranked 
+as an indicator for further screening. Information regarding the 20 MOFs 
+is presented in Table S3 . 
+Initially, three MOFs without stability data were excluded and are 
+listed in Group D of Table S4 . Subsequently, depending on the predicted 
+stability values, MOFs with stability values < 0.6 upon solvent removal 
+and thermal stability < 300 
+◦
+C were excluded and placed in Group C. 
+Lastly, referring to the ranking and stability assessment of MOFs, poor- 
+performing MOFs were excluded and listed in Group B. Eventually, 
+seven potential excellent MOF adsorbents were identified and listed in 
+Group A. Information on these seven superior MOFs is shown in Table 1 . 
+Some are already well known, such as UiO-66, which will facilitate 
+further validation. 
+3.6. Adsorption validation 
+Among the seven selected MOFs, MOF-801 and UiO-66 had been 
+investigated for their ability to adsorb Cr(VI) from water. As shown in 
+Table 2 , compared to the unmodified MOFs, MOF-801 and UiO-66 
+exhibited superior adsorption performances. MOF-801, consisting of a 
+Zr
+6
+O
+4
+(OH)
+4 
+cluster and a short linker of fumaric acid, was synthesised 
+by the solvothermal method and studied for its adsorption performance 
+toward Cr(VI) from an aqueous solution. All the adsorption experiments 
+were performed in batch mode. The adsorption capacity of Cr(VI) in 
+water by MOF-801 can reach 156 mg/g, ranking second with an initial 
+concentrate range is 5 – 1000 mg/L [4] . UiO-66, which contains hex -
+anuclear zirconium clusters linked by terephthalates, was synthesised 
+using a hydrothermal method. Hexavalent chromium adsorption was 
+studied using UiO-66 and all experiments were performed under batch 
+conditions. The adsorption capacity of UiO-66 was 86 mg/g at a CI of 50 
+mg/L, ranking fifth, lower than that of ZIF-8 (1050 m
+2
+/g). One reason 
+for this is that ZIF-8 has a higher SA than UiO-66 (800 m
+2
+/g), thus 
+providing more adsorption sites [56] . 
+We synthesised MOF-801 and UiO-66 using the methods described in 
+the original publications [56,57] and conducted further experiments to 
+validate their Cr(VI) adsorption capacities in water [4] . The sources and 
+Fig. 5. Structure-adsorption capacity relationships of MOFs.  
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+843
+purities of all chemicals are listed in Table S5 . Cr(VI) solutions (200 mL) 
+with different concentrations were prepared in 250 mL conical flasks. 
+Subsequently, 5 mg of MOF-801 and UiO-66 were added to each flask, 
+which were then sealed with a cling film and placed in a constant- 
+temperature shaker at 170 rpm. The CI of Cr(VI) in the solution 
+ranged from 10 to 100 mg/L, with the pH set to natural, and the oscil -
+lation time set to 600 min at room temperature (298 K). As shown in 
+Table 2 and Fig. 6 , the adsorption capacities of MOF-801 and UiO-66 
+were 144 and 164 mg/g, respectively, ranking first and second, 
+respectively, when the CI reached 100 mg/L. These results further 
+confirmed the excellent adsorption performance of both MOF-801 and 
+UiO-66. 
+4. Conclusions 
+Using a data-driven ML method, this study identified XGB as the 
+prediction model with the best model performance. A high-precision 
+prediction of the Cr(VI) adsorption performance of the MOFs was ach -
+ieved and the range of structural characteristics of the high-performance 
+MOF adsorbents was determined. Although some published studies have 
+presented views on predicting the performance of MOF adsorbents, 
+challenges in screening persist [37,68 – 70] . This study proposed a MOF 
+adsorbent screening strategy by mining the adsorption rules and 
+revealing the structure – activity relationship, which was successfully 
+implemented to screen seven MOFs with the best adsorption properties 
+from 3833 MOFs and verified the adsorption properties of two MOF 
+adsorbents with high potential, UiO-66 and MOF-801, through experi -
+ments. This study provides new ideas for the optimisation and screening 
+of adsorbents for the removal of Cr(VI) pollutants from water. 
+Nevertheless, there is still room for improvement in the performance 
+of models used to simulate adsorption experiments. In addition to 
+insufficient data, another significant reason for this is the specific 
+adsorption caused by the presence of specific functional groups in 
+certain MOFs, which is also an influential factor in the adsorption ca -
+pacity. These factors limit the ability of the data to fully support model 
+learning. Further, in-depth studies are required to address these 
+limitations. 
+CRediT authorship contribution statement 
+Mingxing Jiang: Writing – original draft, Visualization, Methodol -
+ogy, Data curation, Conceptualization. Weiwei Fu: Writing – review & 
+editing. Ying Wang: Writing – review & editing, Data curation. 
+Duanping Xu: Supervision, Funding acquisition. Sitan Wang: Writing – 
+review & editing, Project administration, Funding acquisition. 
+Table 1 
+Information on 7 excellent MOFs.  
+Ref code Synonyms Coordination 
+metal 
+Stability in aqueous solutions and 
+acidic conditions 
+Thermal stability ℃ & Stability upon solvent 
+removal （ Predicted ） 
+DOI_public 
+RUBTAK04 UiO-66 Zr Highly stable > 400 https://doi.org/10.1002/anie. 
+201505461 
+SURHEU UiO-66 Zr Highly stable > 400 https://doi.org/10.1002/anie. 
+201505461 
+SURKUN UiO-66 Zr Highly stable > 400 https://doi.org/10.1002/anie. 
+201505461 
+BIBBUL – Zn – 352.8 & 0.69 https://doi.org/10.1016/j.ica.201 
+3.03.015 
+XUFPIZ – Co – 406.8 & 0.9 https://doi.org/10.1016/j.inoch 
+e.2014.10.019 
+BOHJUF MOF-801 Zr Stable > 400 https://doi.org/10.1021/ 
+ja500330a 
+SETQEP MIL-53 
+(Fe) 
+Fe Stable 324.5 https://doi.org/10.1021/ 
+cm301242d  
+Table 2 
+Comparison of the adsorption capacities of Cr(VI) in water by MOFs.  
+MOF Adsorption capacity(mg/g) Concentration 
+(mg/L) 
+pH Ref. 
+UiO-66 164 100 7 this work 
+MOF-801 156 1000 – [4] 
+MOF-801 144 100 7 this work 
+ZIF-8 112 50 3 [56] 
+UiO-66 86 50 3  
+FIR-53 74 312 – [58] 
+MIL-100(Fe) 74 100 2 [59] 
+Dy-MOF 63 – – [60] 
+MOF-5 62 40 4 [61] 
+SLUG-21 60 – – [62] 
+Cu-BTC 58 40 7 [6] 
+MIL-100(Fe) 54 10 2 [63] 
+MOF-867 54 400 7 [64] 
+MIL-101(Cr) 40 100 6 [65] 
+ZIF-8 25 20 7 [66] 
+ZIF-67 15 30 7 [67] 
+NU-1000 49 50 7 [55] 
+UiO-66 30 50 7  
+UiO-67 20 50 7  
+MIL-100(Fe) 7 50 7  
+HKUST-1 3 50 7  
+ZIF-8 < 1 50 7   
+Fig. 6. Adsorption isotherms of Cr(VI) on MOF-801 and UiO-66 (Initial con -
+centration = 10 – 100 mg/L, natural pH, adsorption time = 600 min, room 
+temperature = 298 K, replication of adsorption experiments: n = 3). 
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+844
+Declaration of competing interest 
+The authors declare that they have no known competing financial 
+interests or personal relationships that could have appeared to influence 
+the work reported in this paper. 
+Data availability 
+Data will be made available on request. 
+Acknowledgments 
+This study was supported by the National Key Research and Devel -
+opment Program of China (2019YFC1803800) and the Scientific 
+Research Project of the Education Department of Liaoning Province 
+(LJ2019QL009). 
+Appendix A. Supplementary material 
+Supplementary data to this article can be found online at https://doi. 
+org/10.1016/j.jcis.2024.02.084 . 
+References 
+[1] L. Rani, J. Kaushal, A.L. Srivastav, P. Mahajan, A critical review on recent 
+developments in MOF adsorbents for the elimination of toxic heavy metals from 
+aqueous solutions, Environ. Sci. Pollut. Res. 27 (36) (2020) 44771 – 44796, https:// 
+doi.org/10.1007/s11356-020-10738-8 . 
+[2] L. He, L. Bai, D.D. Dionysiou, Z. Wei, R. Spinney, C. Chu, Z. Lin, R. Xiao, 
+Applications of computational chemistry, artificial intelligence, and machine 
+learning in aquatic chemistry research, Chem. Eng. J. 426 (2021) 131810, https:// 
+doi.org/10.1016/j.cej.2021.131810 . 
+[3] T. He, Y.Z. Zhang, X.J. Kong, J. Yu, X.L. Lv, Y. Wu, Z.J. Guo, J.R. Li, Zr(IV)-based 
+metal-organic framework with t-shaped ligand: unique structure, high stability, 
+selective detection, and rapid adsorption of Cr2O72 – in water, ACS Appl. Mater. 
+Interfaces. 10 (19) (2018) 16650 – 16659, https://doi.org/10.1021/ 
+acsami.8b03987 . 
+[4] M. Zheng, X. Zhao, K. Wang, Y. She, Z. Gao, Highly efficient removal of Cr(VI) on a 
+stable metal – organic framework based on enhanced h-bond interaction, Ind. Eng. 
+Chem. Res. 58 (51) (2019) 23330 – 23337, https://doi.org/10.1021/acs. 
+iecr.9b04598 . 
+[5] M. Owlad, M.K. Aroua, W.A.W. Daud, S. Baroutian, Removal of hexavalent 
+chromium-contaminated water and wastewater: a review, Water Air Soil Pollut. 
+200 (1) (2009) 59 – 77, https://doi.org/10.1007/s11270-008-9893-7 . 
+[6] A. Maleki, B. Hayati, M. Naghizadeh, S.W. Joo, Adsorption of hexavalent 
+chromium by metal organic frameworks from aqueous solution, J. Ind. Eng. Chem. 
+28 (2015) 211 – 216, https://doi.org/10.1016/j.jiec.2015.02.016 . 
+[7] P. Khare, A. Yadav, J. Ramkumar, N. Verma, Microchannel-embedded 
+metal – carbon – polymer nanocomposite as a novel support for chitosan for efficient 
+removal of hexavalent chromium from water under dynamic conditions, Chem. 
+Eng. J. 293 (2016) 44 – 54, https://doi.org/10.1016/j.cej.2016.02.049 . 
+[8] Y. Wang, N. Zhang, D. Chen, D. Ma, G. Liu, X. Zou, Y. Chen, R. Shu, Q. Song, W. Lv, 
+Facile synthesis of acid-modified UiO-66 to enhance the removal of Cr(VI) from 
+aqueous solutions, Sci. Total Environ. 682 (2019) 118 – 127, https://doi.org/ 
+10.1016/j.scitotenv.2019.04.407 . 
+[9] D. Saha, S. Deng, Ammonia adsorption and its effects on framework stability of 
+MOF-5 and MOF-177, J. Colloid Interface Sci. 348 (2) (2010) 615 – 620, https://doi. 
+org/10.1016/j.jcis.2010.04.078 . 
+[10] B. Li, H.M. Wen, Y. Yu, Y. Cui, W. Zhou, B. Chen, G. Qian, Nanospace within 
+metal – organic frameworks for gas storage and separation, Mater. Today Nano. 2 
+(2018) 21 – 49, https://doi.org/10.1016/j.mtnano.2018.09.003 . 
+[11] S. Zhang, J. Wang, Y. Zhang, J. Ma, L. Huang, S. Yu, L. Chen, G. Song, M. Qiu, 
+X. Wang, Applications of water-stable metal-organic frameworks in the removal of 
+water pollutants: a review, Environ. Pollut. 291 (2021) 118076, https://doi.org/ 
+10.1016/j.envpol.2021.118076 . 
+[12] P.A. Kobielska, A.J. Howarth, O.K. Farha, S. Nayak, Metal – organic frameworks for 
+heavy metal removal from water, Coord. Chem. Rev. 358 (2018) 92 – 107, https:// 
+doi.org/10.1016/j.ccr.2017.12.010 . 
+[13] C. Du, Z. Zhang, G. Yu, H. Wu, H. Chen, L. Zhou, Y. Zhang, Y. Su, S. Tan, L. Yang, 
+J. Song, S. Wang, A review of metal organic framework (MOFs)-based materials for 
+antibiotics removal via adsorption and photocatalysis, Chemosphere. 272 (2021) 
+129501, https://doi.org/10.1016/j.chemosphere.2020.129501 . 
+[14] Z. Wang, Y. Zhou, T. Zhou, K. Sundmacher, Identification of optimal metal-organic 
+frameworks by machine learning: structure decomposition, feature integration, 
+and predictive modeling, Comput. Chem. Eng. 160 (2022) 107739, https://doi. 
+org/10.1016/j.compchemeng.2022.107739 . 
+[15] S. Zhong, K. Zhang, M. Bagheri, J.G. Burken, A. Gu, B. Li, X. Ma, B.L. Marrone, Z. 
+J. Ren, J. Schrier, W. Shi, H. Tan, T. Wang, X. Wang, B.M. Wong, X. Xiao, X. Yu, J. 
+J. Zhu, H. Zhang, Machine learning: new ideas and tools in environmental science 
+and engineering, Environ. Sci. Technol. 55 (19) (2021) 12741 – 12754, https://doi. 
+org/10.1021/acs.est.1c01339 . 
+[16] M.X. Jiang, S.T. Wang, D.P. Xu, Prediction of adsorption performance of MOFs for 
+heavy metals in water based on machine learning, China Environ. Sci. 43 (5) 
+(2023) 2319 – 2327 . 
+[17] S. Gupta, D. Aga, A. Pruden, L. Zhang, P. Vikesland, Data analytics for 
+environmental science and engineering research, Environ. Sci. Technol. 55 (16) 
+(2021) 10895 – 10907, https://doi.org/10.1021/acs.est.1c01026 . 
+[18] X. Bai, Z. Shi, H. Xia, S. Li, Z. Liu, H. Liang, Z. Liu, B. Wang, Z. Qiao, Machine- 
+learning-assisted high-throughput computational screening of metal – organic 
+framework membranes for hydrogen separation, Chem. Eng. J. 446 (2022) 
+136783, https://doi.org/10.1016/j.cej.2022.136783 . 
+[19] X.Y. Lu, Y.J. Wu, X.J. Wu, Z.X. Cao, X.H. Wei, W.Q. Cai, High-throughput 
+computational screening of porous polymer networks for natural gas sweetening 
+based on a neural network, AlChE J. 68 (1) (2022) e17433 . 
+[20] X. Deng, W. Yang, S. Li, H. Liang, Z. Shi, Z. Qiao, Large-scale screening and 
+machine learning to predict the computation-ready, experimental metal-organic 
+frameworks for CO
+2 
+capture from air, Appl. Sci. 10 (2) (2020), https://doi.org/ 
+10.3390/app10020569 . 
+[21] S. Lee, B. Kim, H. Cho, H. Lee, S.Y. Lee, E.S. Cho, J. Kim, Computational screening 
+of trillions of metal – organic frameworks for high-performance methane storage, 
+ACS Appl. Mater. Interfaces. 13 (20) (2021) 23647 – 23654, https://doi.org/ 
+10.1021/acsami.1c02471 . 
+[22] X. Zhang, J. Liu, R. Li, X. Jian, X. Gao, Z. Lu, X. Yue, Machine learning screening of 
+high-performance single-atom electrocatalysts for two-electron oxygen reduction 
+reaction, J. Colloid Interface Sci. 645 (2023) 956 – 963, https://doi.org/10.1016/j. 
+jcis.2023.05.011 . 
+[23] Z. Shi, W. Yang, X. Deng, C. Cai, Y. Yan, H. Liang, Z. Liu, Z. Qiao, Machine- 
+learning-assisted high-throughput computational screening of high performance 
+metal – organic frameworks, Mol. Syst. Des. Eng. 5 (4) (2020) 725 – 742, https://doi. 
+org/10.1039/D0ME00005A . 
+[24] Z. Gülsoy, K.B. Sezginel, A. Uzun, S. Keskin, R. Yıldırım, Analysis of CH
+4 
+uptake 
+over metal – organic frameworks using data-mining tools, ACS Comb. Sci. 21 (4) 
+(2019) 257 – 268, https://doi.org/10.1021/acscombsci.8b00150 . 
+[25] X.C. Nguyen, Q.V. Ly, T.T.H. Nguyen, H.T.T. Ngo, Y. Hu, Z. Zhang, Potential 
+application of machine learning for exploring adsorption mechanisms of 
+pharmaceuticals onto biochars, Chemosphere. 287 (2022) 132203, https://doi. 
+org/10.1016/j.chemosphere.2021.132203 . 
+[26] C. Lu, Z. Xu, B. Dong, Y. Zhang, M. Wang, Y. Zeng, C. Zhang, Machine learning for 
+the prediction of heavy metal removal by chitosan-based flocculants, Carbohydr. 
+Polym. 285 (2022) 119240, https://doi.org/10.1016/j.carbpol.2022.119240 . 
+[27] X. Zhu, Z. Wan, D.C.W. Tsang, M. He, D. Hou, Z. Su, J. Shang, Machine learning for 
+the selection of carbon-based materials for tetracycline and sulfamethoxazole 
+adsorption, Chem. Eng. J. 406 (2021) 126782, https://doi.org/10.1016/j. 
+cej.2020.126782 . 
+[28] X. Zhu, X. Wang, Y.S. Ok, The application of machine learning methods for 
+prediction of metal sorption onto biochars, J. Hazard. Mater. 378 (2019) 120727, 
+https://doi.org/10.1016/j.jhazmat.2019.06.004 . 
+[29] S. Namdeo, V.C. Srivastava, P. Mohanty, Machine learning implemented 
+exploration of the adsorption mechanism of carbon dioxide onto porous carbons, 
+J. Colloid Interface Sci. 647 (2023) 174 – 187, https://doi.org/10.1016/j. 
+jcis.2023.05.052 . 
+[30] M.H. Ahmadi Azqhandi, M. Ghaedi, F. Yousefi, M. Jamshidi, Application of random 
+forest, radial basis function neural networks and central composite design for 
+modeling and/or optimization of the ultrasonic assisted adsorption of brilliant 
+green on ZnS-NP-AC, J. Colloid Interface Sci. 505 (2017) 278 – 292, https://doi. 
+org/10.1016/j.jcis.2017.05.098 . 
+[31] W.F. Wang, L.L. Zhang, C.Z. Cai, S.H. Li, H. Liang, Y.F. Wu, H. Zheng, Z.W. Qiao, 
+Machine learning assisted high-throughput computational screening of MOFs for 
+the capture of chemical warfare agents from the air, Sep. Purif. Technol. 325 
+(2023), https://doi.org/10.1016/j.seppur.2023.124546 . 
+[32] L. Breiman, Random forests, Mach. Learn. 45 (1) (2001) 5 – 32, https://doi.org/ 
+10.1023/A:1010933404324 . 
+[33] J.H. Friedman, Greedy function approximation: a gradient boosting machine, Ann. 
+Stat. 29 (5) (2001) 1189 – 1232, https://doi.org/10.1214/aos/1013203451 . 
+[34] T. Chen, C. Guestrin, Xgboost: A scalable tree boosting system, Proceedings of the 
+22nd acm sigkdd international conference on knowledge discovery and data 
+mining. (2016) 785-794, https://doi.org/10.1145/2939672.2939785. 
+[35] A.J. Smola, B. Sch ¨olkopf, A tutorial on support vector regression, Stat. Comput. 14 
+(3) (2004) 199 – 222, https://doi.org/10.1023/B:STCO.0000035301.49549.88 . 
+[36] J. Goldberger, S. Roweis, G. Hinton, R. Salakhutdino, Neighbourhood components 
+analysis, NeurIPS. 17 (2004) . 
+[37] G. Alam, I. Ihsanullah, M. Naushad, M. Sillanp ¨a ¨a, Applications of artificial 
+intelligence in water treatment for optimization and automation of adsorption 
+processes: recent advances and prospects, Chem. Eng. J. 427 (2022) 130011, 
+https://doi.org/10.1016/j.cej.2021.130011 . 
+[38] C. Wang, Y. Pan, J. Chen, Y. Ouyang, J. Rao, Q. Jiang, Indicator element selection 
+and geochemical anomaly mapping using recursive feature elimination and 
+random forest methods in the Jingdezhen region of Jiangxi Province, South China, 
+Appl. Geochem. 122 (2020) 104760, https://doi.org/10.1016/j. 
+apgeochem.2020.104760 . 
+[39] S. Sundhararajan, A. Pahwa, P. Krishnaswami, A comparative analysis of genetic 
+algorithms and directed grid search for parametric optimization, Eng. Comput- 
+Germany. 14 (3) (1998) 197 – 205, https://doi.org/10.1007/BF01215973 . 
+M. Jiang et al.                                                                                                                                                                                                                                   
+
+Journal of Colloid And Interface Science 662 (2024) 836–845
+845
+[40] J. Li, L. Pan, M. Suvarna, Y.W. Tong, X. Wang, Fuel properties of hydrochar and 
+pyrochar: prediction and exploration with machine learning, Appl. Energy. 269 
+(2020) 115166, https://doi.org/10.1016/j.apenergy.2020.115166 . 
+[41] F. Pedregosa, G. Varoquaux, A. Gramfort, V. Michel, B. Thirion, O. Grisel, 
+M. Blondel, P. Prettenhofer, R. Weiss, V. Dubourg, Scikit-learn: Machine learning in 
+python, J. Mach. Learn. Res. 12 (2011) 2825 – 2830 . 
+[42] X. Yuan, M. Suvarna, S. Low, P.D. Dissanayake, K.B. Lee, J. Li, X. Wang, Y.S. Ok, 
+Applied machine learning for prediction of CO
+2 
+adsorption on biomass waste- 
+derived porous carbons, Environ. Sci. Technol. 55 (17) (2021) 11925 – 11936, 
+https://doi.org/10.1021/acs.est.1c01849 . 
+[43] Y.G. Chung, E. Haldoupis, B.J. Bucior, M. Haranczyk, S. Lee, H. Zhang, K. 
+D. Vogiatzis, M. Milisavljevic, S. Ling, J.S. Camp, B. Slater, J.I. Siepmann, D. 
+S. Sholl, R.Q. Snurr, Advances, updates, and analytics for the computation-ready, 
+experimental metal – organic framework database: CoRE MOF 2019, J. Chem. Eng. 
+Data. 64 (12) (2019) 5985 – 5998, https://doi.org/10.1021/acs.jced.9b00835 . 
+[44] S. Wang, C. Wang, C. Zhang, J. Xue, P. Wang, X. Wang, W. Wang, X. Zhang, W. Li, 
+G. Huang, Z. Huo, A classification-based spatiotemporal adaptive fusion model for 
+the evaluation of remotely sensed evapotranspiration in heterogeneous irrigated 
+agricultural area, Remote Sens. Environ. 273 (2022) 112962, https://doi.org/ 
+10.1016/j.rse.2022.112962 . 
+[45] F. Yu, X. Liu, Research on student performance prediction based on stacking fusion 
+model, Electronics. 11 (2022) 3166, https://doi.org/10.3390/ 
+electronics11193166 . 
+[46] C. Altintas, G. Avci, H. Daglar, A. Nemati Vesali Azar, S. Velioglu, I. Erucar, 
+S. Keskin, Database for CO
+2 
+separation performances of MOFs based on 
+computational materials screening, ACS Appl. Mater. Interfaces. 10 (20) (2018) 
+17257 – 17268, https://doi.org/10.1021/acsami.8b04600 . 
+[47] P.Z. Moghadam, S.M.J. Rogge, A. Li, C.M. Chow, J. Wieme, N. Moharrami, 
+M. Aragones-Anglada, G. Conduit, D.A. Gomez-Gualdron, V. Van Speybroeck, 
+D. Fairen-Jimenez, Structure-mechanical stability relations of metal-organic 
+frameworks via machine learning, Matter. 1 (1) (2019) 219 – 234, https://doi.org/ 
+10.1016/j.matt.2019.03.002 . 
+[48] R. Batra, C. Chen, T.G. Evans, K.S. Walton, R. Ramprasad, Prediction of water 
+stability of metal – organic frameworks using machine learning, Nat. Mach. Intell. 2 
+(11) (2020) 704 – 710, https://doi.org/10.1038/s42256-020-00249-z . 
+[49] S.S. Zheng, Y. Sun, H.G. Xue, P. Braunstein, W. Huang, H. Pang, Dual-ligand and 
+hard-soft-acid-base strategies to optimize metal-organic framework nanocrystals 
+for stable electrochemical cycling performance, Natl. Sci. Rev. 9 (7) (2022), 
+https://doi.org/10.1093/nsr/nwab197 . 
+[50] A. Nandy, G. Terrones, N. Arunachalam, C. Duan, D.W. Kastner, H.J. Kulik, 
+MOFSimplify, machine learning models with extracted stability data of three 
+thousand metal-organic frameworks, Sci. Data. 9 (2022) 74, https://doi.org/ 
+10.1038/s41597-022-01181-0 . 
+[51] J. Ouyang, L. Zhou, Z. Liu, J.Y.Y. Heng, W. Chen, Biomass-derived activated 
+carbons for the removal of pharmaceutical mircopollutants from wastewater: a 
+review, Sep. Purif. Technol. 253 (2020) 117536, https://doi.org/10.1016/j. 
+seppur.2020.117536 . 
+[52] S.M. Lundberg, G. Erion, H. Chen, A. DeGrave, J.M. Prutkin, B. Nair, R. Katz, 
+J. Himmelfarb, N. Bansal, S.I. Lee, From local explanations to global understanding 
+with explainable AI for trees, Nat. Mach. Intell. 2 (1) (2020) 56 – 67, https://doi. 
+org/10.1038/s42256-019-0138-9 . 
+[53] S.M. Lundberg, S.I. Lee, A unified approach to interpreting model predictions, 
+NeurIPS. 30 (2017) . 
+[54] G.K.F. Tso, K.K.W. Yau, Predicting electricity energy consumption: a comparison of 
+regression analysis, decision tree and neural networks, Energy. 32 (9) (2007) 
+1761 – 1768, https://doi.org/10.1016/j.energy.2006.11.010 . 
+[55] Z.J. Lin, H.Q. Zheng, H.Y. Zheng, L.P. Lin, Q. Xin, R. Cao, Efficient capture and 
+effective sensing of Cr
+2
+O
+7
+2 – 
+from water using a zirconium metal – organic 
+framework, Inorg. Chem. 56 (22) (2017) 14178 – 14188, https://doi.org/10.1021/ 
+acs.inorgchem.7b02327 . 
+[56] Z. Noraee, A. Jafari, M. Ghaderpoori, B. Kamarehie, A. Ghaderpoury, Use of metal- 
+organic framework to remove chromium (VI) from aqueous solutions, J. Environ. 
+Health Sci. Eng. 17 (2) (2019) 701 – 709, https://doi.org/10.1007/s40201-019- 
+00385-8 . 
+[57] H. Furukawa, F. G ´andara, Y.B. Zhang, J. Jiang, W.L. Queen, M.R. Hudson, O. 
+M. Yaghi, Water adsorption in porous metal – organic frameworks and related 
+materials, J. Am. Chem. Soc. 136 (11) (2014) 4369 – 4381, https://doi.org/ 
+10.1021/ja500330a . 
+[58] H.R. Fu, Z.X. Xu, J. Zhang, Water-stable metal – organic frameworks for fast and 
+high dichromate trapping via single-crystal-to-single-crystal ion exchange, Chem. 
+Mater. 27 (1) (2015) 205 – 210, https://doi.org/10.1021/cm503767r . 
+[59] A. Nasrollahpour, S.E. Moradi, Hexavalent chromium removal from water by ionic 
+liquid modified metal-organic frameworks adsorbent, Microporous Mesoporous 
+Mater. 243 (2017) 47 – 55, https://doi.org/10.1016/j.micromeso.2017.02.006 . 
+[60] P.F. Shi, B. Zhao, G. Xiong, Y.L. Hou, P. Cheng, Fast capture and separation of, and 
+luminescent probe for, pollutant chromate using a multi-functional cationic 
+heterometal-organic framework, Chem. Commun. 48 (66) (2012) 8231 – 8233, 
+https://doi.org/10.1039/C2CC33707J . 
+[61] M. Babapour, M. Hadi Dehghani, M. Alimohammadi, M. Moghadam Arjmand, M. 
+Salari, L. Rasuli, N.M. Mubarak, N. Ahmad Khan, Adsorption of Cr(VI) from 
+aqueous solution using mesoporous metal-organic framework-5 functionalized 
+with the amino acids: characterization, optimization, linear and nonlinear kinetic 
+models, J. Mol. Liq. 345 (2022) 117835, https://doi.org/10.1016/j. 
+molliq.2021.117835. 
+[62] H. Fei, M.R. Bresler, S.R.J. Oliver, A new paradigm for anion trapping in high 
+capacity and selectivity: crystal-to-crystal transformation of cationic materials, 
+J. Am. Chem. Soc. 133 (29) (2011) 11110 – 11113, https://doi.org/10.1021/ 
+ja204577p . 
+[63] M. Forghani, A. Azizi, M.J. Livani, L.A. Kafshgari, Adsorption of lead(II) and 
+chromium(VI) from aqueous environment onto metal-organic framework MIL-100 
+(Fe): Synthesis, kinetics, equilibrium and thermodynamics, J. Solid State Chem. 
+291 (2020) 121636, https://doi.org/10.1016/j.jssc.2020.121636 . 
+[64] Q. Zhang, J. Yu, J. Cai, L. Zhang, Y. Cui, Y. Yang, B. Chen, G. Qian, A porous Zr- 
+cluster-based cationic metal – organic framework for highly efficient Cr
+2
+O
+7
+2  
+removal from water, Chem. Commun. 51 (79) (2015) 14732 – 14734, https://doi. 
+org/10.1039/C5CC05927E . 
+[65] Z.N. Liu, A.P. Fan, X.G. Han, H. Shapour, Q.Y. Zhang, PEI-modified chromium- 
+based metal organic framework for Cr(VI) removal from aqueous solution, Desalin. 
+Water Treat. 184 (2020) 139 – 149, https://doi.org/10.5004/dwt.2020.24992 . 
+[66] M. Niknam Shahrak, M. Ghahramaninezhad, M. Eydifarash, Zeolitic imidazolate 
+framework-8 for efficient adsorption and removal of Cr(VI) ions from aqueous 
+solution, Environ. Sci. Pollut. Res. 24 (10) (2017) 9624 – 9634, https://doi.org/ 
+10.1007/s11356-017-8577-5 . 
+[67] X. Li, X. Gao, L. Ai, J. Jiang, Mechanistic insight into the interaction and adsorption 
+of Cr(VI) with zeolitic imidazolate framework-67 microcrystals from aqueous 
+solution, Chem. Eng. J. 274 (2015) 238 – 246, https://doi.org/10.1016/j. 
+cej.2015.03.127 . 
+[68] Y.J. Wei, J. Yu, Y.L. Du, H.X. Li, C.H. Su, Artificial intelligence simulation of Pb(II) 
+and Cd(II) adsorption using a novel metal organic framework-based 
+nanocomposite adsorbent, J. Mol. Liq. 343 (2021), https://doi.org/10.1016/j. 
+molliq.2021.117681 . 
+[69] J. Abdi, G. Mazloom, Machine learning approaches for predicting arsenic 
+adsorption from water using porous metal – organic frameworks, Sci. Rep. 12 (1) 
+(2022) 16458, https://doi.org/10.1038/s41598-022-20762-y . 
+[70] X.F. Hu, F. Alsaikhan, H.S. Majdi, D.O. Bokov, A. Mohamed, A. Sadeghi, Predictive 
+modeling and computational machine learning simulation of adsorption separation 
+using advanced nanocomposite materials, Arabian J. Chem. 15 (9) (2022), https:// 
+doi.org/10.1016/j.arabjc.2022.104062 . 
+M. Jiang et al.                                                                                                                                                                                                                                   
