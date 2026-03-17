@@ -247,6 +247,7 @@ SCREENING_MOD_STRATEGY = "training_distribution_marginalized"
 TARGET_CORE_METALS = ["Zn", "In", "Fe", "Cu", "Ti", "Zr", "Nd"]
 
 MODEL_ORDER = ["RF", "GBDT", "XGB", "LR", "KNN", "SVR"]
+GROUP_AWARE_TUNING_GROUP_THRESHOLD = 20
 
 PAPER_FEATURE_LABELS = {
     "ionic_charge": "IC",
@@ -403,6 +404,14 @@ def prepare_model_table(df: pd.DataFrame, fit_df: pd.DataFrame | None = None) ->
 def make_group_ids(raw_df: pd.DataFrame, recipe: str) -> pd.Series:
     if recipe == "metal_only":
         signature = raw_df["Coordination metal"].astype(str).str.strip()
+    elif recipe == "metal_family":
+        signature = pd.DataFrame(
+            {
+                "doi": raw_df["DOI"].ffill().astype(str).str.strip(),
+                "metal": raw_df["Coordination metal"].astype(str).str.strip(),
+                "modification": raw_df["Modification method"].astype(str).str.strip(),
+            }
+        ).astype(str).agg("|".join, axis=1)
     elif recipe == "paper_43":
         cols = ["Coordination metal", "Modification method", "Surface areas(m2/g)"]
         signature = raw_df[cols].astype(str).agg("|".join, axis=1)
@@ -447,30 +456,6 @@ def load_training_table(descriptor_preset: str, mod_encoding: str, group_recipe:
     df = pd.concat([df, props], axis=1)
     df["mod_code"] = df["modification"].map(MOD_ENCODING_PRESETS[mod_encoding]).astype(int)
     df["mpd"] = derive_mpd(df["pv"], df["sa"])
-    return df
-
-def load_screening_table(descriptor_preset: str) -> pd.DataFrame:
-    df = pd.read_excel(resolve_data_xlsx(), sheet_name="Initial screening(70)")
-    df = df.rename(
-        columns={
-            "filename": "filename",
-            "PD": "pd",
-            "MPD": "mpd",
-            "SA": "sa",
-            "VF": "vf",
-            "PV": "pv",
-            "All_Metals": "metal",
-            "RF_Q": "paper_rf_q",
-            "XGB_Q": "paper_xgb_q",
-        }
-    )
-    props = df["metal"].map(DESCRIPTOR_PRESETS[descriptor_preset]).apply(pd.Series)
-    df = pd.concat([df, props], axis=1)
-    df["ci"] = 300.0
-    df["ad"] = 500.0
-    df["time"] = 720.0
-    df["ph"] = 7.0
-    df["temp"] = 298.0
     return df
 
 def load_core_mof_table() -> pd.DataFrame | None:
@@ -762,6 +747,13 @@ def build_kfold_prepared_folds(raw_df: pd.DataFrame, n_splits: int = 10) -> list
         folds.append((fold_train, fold_val))
     return folds
 
+def recommend_test_group_count(n_groups: int) -> int:
+    if n_groups <= 5:
+        return 1
+    if n_groups <= 12:
+        return 2
+    return max(1, int(round(n_groups * 0.15)))
+
 def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
     n_splits = min(10, int(raw_df["group_id"].nunique()))
     folds = build_group_cv_folds(raw_df, n_splits=n_splits)
@@ -824,18 +816,20 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
 def make_split(df: pd.DataFrame, config) -> SplitBundle:
     groups = pd.Series(df["group_id"])
     unique_groups = pd.Index(groups.drop_duplicates())
+    recommended_test_groups = recommend_test_group_count(len(unique_groups))
 
     if config.mode == "sequential":
-        default_train_group_count = int(round(len(unique_groups) * 0.9))
+        default_train_group_count = len(unique_groups) - recommended_test_groups
         train_group_count = config.train_group_count or default_train_group_count
-        train_group_count = min(max(1, train_group_count), max(1, len(unique_groups) - 1))
+        train_group_count = min(max(1, train_group_count), max(1, len(unique_groups) - recommended_test_groups))
         train_groups = set(unique_groups[:train_group_count])
         train_idx = df.index[df["group_id"].isin(train_groups)].to_numpy()
         test_idx = df.index[~df["group_id"].isin(train_groups)].to_numpy()
         return SplitBundle(train_idx, test_idx, len(train_groups), df.loc[test_idx, "group_id"].nunique())
 
     if config.mode == "group_shuffle":
-        splitter = GroupShuffleSplit(n_splits=1, test_size=0.1, random_state=config.random_state)
+        test_size = recommended_test_groups if len(unique_groups) <= GROUP_AWARE_TUNING_GROUP_THRESHOLD else 0.1
+        splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=config.random_state)
         train_idx, test_idx = next(splitter.split(df, groups=groups))
         return SplitBundle(train_idx, test_idx, df.iloc[train_idx]["group_id"].nunique(), df.iloc[test_idx]["group_id"].nunique())
 
@@ -949,10 +943,6 @@ def make_second_adsorption_dataset(
 
 
 # --- main_figures.py ---
-
-def mean_prediction_for_frame(pipe: Pipeline, frame: pd.DataFrame) -> float:
-    preds = pipe.predict(frame[TRAINING_FEATURES])
-    return float(np.mean(preds))
 
 def nice_axis_upper(value: float) -> float:
     if value <= 0:
@@ -1467,27 +1457,6 @@ def write_summary(
     )
     (OUTPUT_DIR / "reproduction_summary.md").write_text("\n".join(lines), encoding="utf-8")
 
-def _update_readme(root: Path) -> None:
-    content = r"""# Paper Reproduction
-
-This workspace now contains a refined local reproduction of:
-
-`Machine-learning-driven discovery of metal-organic framework adsorbents for hexavalent chromium removal from aqueous environments`
-
-## Main Entry
-
-- `scripts/reproduce_paper.py`
-  Runs both a paper-faithful evaluation and a score-matched calibrated evaluation, then regenerates the main paper-style figures, including the final `fig4_best`.
-
-## Run
-
-```powershell
-& 'F:\ProgramFiles\Anaconda\python.exe' scripts\reproduce_paper.py
-```
-"""
-    (root / "REPRODUCTION.md").write_text(content, encoding="utf-8")
-
-
 # --- workflow ---
 
 def ensure_output_dir() -> None:
@@ -1507,7 +1476,7 @@ def run_reproduction(skip_supplementary: bool = False) -> int:
             mode="sequential",
             descriptor_preset="calibrated_mixed",
             mod_encoding="calibrated",
-            group_recipe="metal_only",
+            group_recipe="metal_family",
             train_group_count=39,
         ),
         SplitConfig(
@@ -1515,7 +1484,7 @@ def run_reproduction(skip_supplementary: bool = False) -> int:
             mode="group_shuffle",
             descriptor_preset="calibrated_mixed",
             mod_encoding="calibrated",
-            group_recipe="metal_only",
+            group_recipe="metal_family",
             random_state=24,
         ),
     ]
@@ -1525,7 +1494,7 @@ def run_reproduction(skip_supplementary: bool = False) -> int:
     split_pipes: dict[str, object] = {}
     prepared_splits: dict[str, object] = {}
 
-    display_training_raw = load_training_table("calibrated_mixed", "calibrated", "metal_only")
+    display_training_raw = load_training_table("calibrated_mixed", "calibrated", "metal_family")
     _, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
     strict_group_cv_summary, strict_group_cv_folds, strict_group_cv_groups = evaluate_models_with_group_cv(
@@ -1630,8 +1599,6 @@ def save_doc_page_to_text_image(pdf_name_pattern: str, page_number: int, out_nam
 
 
 # --- integrated_fig4_module ---
-
-matplotlib.use("Agg")
 
 LOGGER = logging.getLogger("fig4_refine")
 
@@ -2515,49 +2482,6 @@ This workspace now contains a refined local reproduction of:
 ```
 """
     (ROOT / 'REPRODUCTION.md').write_text(content, encoding='utf-8')
-
-
-def fit_tuned_models(raw_df: pd.DataFrame, best_per_model: pd.DataFrame) -> tuple[dict[str, Pipeline], pd.DataFrame]:
-    prepared_full_df = prepare_model_table(raw_df, fit_df=raw_df)
-    y = prepared_full_df['q'].to_numpy()
-    fitted: dict[str, Pipeline] = {}
-    for row in best_per_model.itertuples(index=False):
-        params = json.loads(row.params_json) if isinstance(row.params_json, str) else row.params_json
-        pipe = Pipeline([('prep', build_preprocessor(TRAINING_FEATURES)), ('model', instantiate_model(row.model, params))])
-        pipe.fit(prepared_full_df[TRAINING_FEATURES], y)
-        fitted[row.model] = pipe
-    return fitted, prepared_full_df
-
-
-def fit_full_models(raw_df: pd.DataFrame, tuned_params: dict[str, dict[str, object]] | None = None) -> tuple[dict[str, Pipeline], pd.DataFrame]:
-    prepared_df = prepare_model_table(raw_df, fit_df=raw_df)
-    y = prepared_df['q'].to_numpy()
-    pipes: dict[str, Pipeline] = {}
-    for model_name in MODEL_ORDER:
-        model = instantiate_model(model_name, None if tuned_params is None else tuned_params.get(model_name))
-        pipe = Pipeline([('prep', build_preprocessor(TRAINING_FEATURES)), ('model', model)])
-        pipe.fit(prepared_df[TRAINING_FEATURES], y)
-        pipes[model_name] = pipe
-    return pipes, prepared_df
-
-
-def fit_full_screening_models(raw_df: pd.DataFrame, tuned_params: dict[str, dict[str, object]] | None = None) -> tuple[dict[str, Pipeline], pd.DataFrame]:
-    prepared_df = prepare_model_table(raw_df, fit_df=raw_df)
-    y = prepared_df['q'].to_numpy()
-    pipes: dict[str, Pipeline] = {}
-    for model_name in ['RF', 'XGB']:
-        model = instantiate_model(model_name, None if tuned_params is None else tuned_params.get(model_name))
-        pipe = Pipeline([('prep', build_preprocessor(TRAINING_FEATURES)), ('model', model)])
-        pipe.fit(prepared_df[TRAINING_FEATURES], y)
-        pipes[model_name] = pipe
-    return pipes, prepared_df
-
-
-def rank_screening_candidates(screening_df: pd.DataFrame, pipes: dict[str, Pipeline]) -> pd.DataFrame:
-    out = screening_df.copy()
-    for model_name, pipe in pipes.items():
-        out[f'{model_name}_q'] = pipe.predict(out[TRAINING_FEATURES])
-    return out
 
 
 def main() -> int:
