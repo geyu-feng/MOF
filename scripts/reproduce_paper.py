@@ -1871,6 +1871,26 @@ def compute_rug_values(training_df: pd.DataFrame, feature_name: str, limits: tup
 def build_linear_grid(limits: tuple[float, float], n_points: int) -> np.ndarray:
     return np.linspace(float(limits[0]), float(limits[1]), int(n_points), dtype=float)
 
+def build_one_d_grid(
+    training_df: pd.DataFrame,
+    feature_name: str,
+    limits: tuple[float, float],
+    n_points: int,
+) -> np.ndarray:
+    values = compute_rug_values(training_df, feature_name, limits)
+    if values.size == 0:
+        return build_linear_grid(limits, n_points)
+    unique_values = np.unique(values)
+    if unique_values.size <= int(n_points):
+        return unique_values.astype(float)
+    quantiles = np.linspace(0.0, 1.0, int(n_points), dtype=float)
+    quantile_grid = np.quantile(values, quantiles)
+    clipped_grid = np.clip(quantile_grid, float(limits[0]), float(limits[1]))
+    unique_grid = np.unique(clipped_grid.astype(float))
+    if unique_grid.size < 2:
+        return build_linear_grid(limits, n_points)
+    return unique_grid
+
 def compute_one_d_panel(
     predictor: Pipeline,
     ensemble: list[Pipeline],
@@ -1879,7 +1899,7 @@ def compute_one_d_panel(
     feature_name: str,
     panel_cfg: dict[str, Any],
 ) -> OneDPanelData:
-    grid = build_linear_grid(tuple(panel_cfg["xlim"]), panel_cfg["n_points"])
+    grid = build_one_d_grid(training_df, feature_name, tuple(panel_cfg["xlim"]), panel_cfg["n_points"])
     point_curve = compute_partial_dependence_1d(predictor, base_frame, feature_name, grid)
     ensemble_curves = [compute_partial_dependence_1d(model, base_frame, feature_name, grid) for model in ensemble]
     _, y_std, y_q05, y_q95 = summarize_ensemble_curves(ensemble_curves)
@@ -2019,7 +2039,7 @@ def infer_y_limits(curve: np.ndarray, panel_cfg: dict[str, Any]) -> tuple[float,
     return y_min - padding * 0.35, y_max + padding * 0.15
 
 def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
-    ax.plot(panel.x, panel.y, color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
+    ax.step(panel.x, panel.y, where="mid", color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
     ax.set_xlim(*panel_cfg["xlim"])
     ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
     ax.set_xlabel(panel_cfg["xlabel"])
