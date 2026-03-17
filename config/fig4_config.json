@@ -3,7 +3,7 @@
   "dataset": {
     "descriptor_preset": "calibrated_mixed",
     "mod_encoding": "calibrated",
-    "group_recipe": "paper_43"
+    "group_recipe": "metal_only"
   },
   "model_selection": {
     "use_cv_best": true,

@@ -401,8 +401,11 @@ def prepare_model_table(df: pd.DataFrame, fit_df: pd.DataFrame | None = None) ->
     return out
 
 def make_group_ids(raw_df: pd.DataFrame, recipe: str) -> pd.Series:
-    if recipe == "paper_43":
+    if recipe == "metal_only":
+        signature = raw_df["Coordination metal"].astype(str).str.strip()
+    elif recipe == "paper_43":
         cols = ["Coordination metal", "Modification method", "Surface areas(m2/g)"]
+        signature = raw_df[cols].astype(str).agg("|".join, axis=1)
     elif recipe == "structural_44":
         cols = [
             "Coordination metal",
@@ -411,9 +414,9 @@ def make_group_ids(raw_df: pd.DataFrame, recipe: str) -> pd.Series:
             "Reporting pore diameter(nm)\n",
             "pore volume(cm3/g)",
         ]
+        signature = raw_df[cols].astype(str).agg("|".join, axis=1)
     else:
         raise ValueError(f"Unknown group recipe: {recipe}")
-    signature = raw_df[cols].astype(str).agg("|".join, axis=1)
     return pd.Series(pd.factorize(signature)[0], index=raw_df.index, name="group_id")
 
 
@@ -665,25 +668,25 @@ def build_target_core_feature_table(
 
 def get_model_param_grids() -> dict[str, dict[str, list[object]]]:
     return {
-        "RF": {"n_estimators": [100, 150], "max_depth": [8, 12], "min_samples_leaf": [5, 10]},
+        "RF": {"n_estimators": [100, 200], "max_depth": [4, 6, 8], "min_samples_leaf": [3, 5, 8]},
         "GBDT": {
-            "n_estimators": [100, 150],
-            "max_depth": [3, 5],
-            "min_samples_leaf": [2, 3],
-            "learning_rate": [0.05, 0.1],
+            "n_estimators": [80, 120, 160],
+            "max_depth": [2, 3],
+            "min_samples_leaf": [1, 2, 4],
+            "learning_rate": [0.03, 0.05, 0.1],
         },
         "XGB": {
-            "n_estimators": [200, 250],
-            "max_depth": [10, 15],
-            "min_child_weight": [5, 7],
-            "gamma": [0.0, 0.1],
-            "learning_rate": [0.01],
-            "subsample": [0.8],
-            "colsample_bytree": [0.9],
+            "n_estimators": [100, 160, 220],
+            "max_depth": [2, 4, 6],
+            "min_child_weight": [3, 5, 8],
+            "gamma": [0.0, 0.1, 0.3],
+            "learning_rate": [0.03, 0.05, 0.1],
+            "subsample": [0.7, 0.85],
+            "colsample_bytree": [0.7, 0.9],
         },
         "LR": {"fit_intercept": [True, False]},
-        "KNN": {"n_neighbors": [3, 5, 7, 9], "weights": ["uniform", "distance"]},
-        "SVR": {"C": [1.0, 10.0, 50.0], "epsilon": [0.5, 1.0], "gamma": ["scale", 0.1]},
+        "KNN": {"n_neighbors": [3, 5, 7, 9, 11, 15], "weights": ["uniform", "distance"]},
+        "SVR": {"C": [1.0, 5.0, 10.0, 50.0, 100.0], "epsilon": [0.1, 0.5, 1.0, 5.0], "gamma": ["scale", 0.01, 0.05, 0.1]},
     }
 
 def instantiate_model(model_name: str, params: dict[str, object] | None = None) -> object:
@@ -760,7 +763,8 @@ def build_kfold_prepared_folds(raw_df: pd.DataFrame, n_splits: int = 10) -> list
     return folds
 
 def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
-    folds = build_kfold_prepared_folds(raw_df, n_splits=10)
+    n_splits = min(10, int(raw_df["group_id"].nunique()))
+    folds = build_group_cv_folds(raw_df, n_splits=n_splits)
     rows: list[dict[str, object]] = []
 
     for model_name in MODEL_ORDER:
@@ -768,6 +772,8 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
             fold_r2: list[float] = []
             fold_mae: list[float] = []
             fold_rmse: list[float] = []
+            actual_chunks: list[np.ndarray] = []
+            pred_chunks: list[np.ndarray] = []
             for fold_train, fold_val in folds:
                 pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, params))])
                 pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
@@ -776,6 +782,11 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
                 fold_r2.append(r2_score(actual, pred))
                 fold_mae.append(mean_absolute_error(actual, pred))
                 fold_rmse.append(mean_squared_error(actual, pred) ** 0.5)
+                actual_chunks.append(actual)
+                pred_chunks.append(pred)
+
+            actual_all = np.concatenate(actual_chunks)
+            pred_all = np.concatenate(pred_chunks)
 
             rows.append(
                 {
@@ -785,12 +796,17 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
                     "std_r2": float(np.std(fold_r2)),
                     "mean_mae": float(np.mean(fold_mae)),
                     "mean_rmse": float(np.mean(fold_rmse)),
+                    "oof_r2": float(r2_score(actual_all, pred_all)),
+                    "oof_mae": float(mean_absolute_error(actual_all, pred_all)),
+                    "oof_rmse": float(mean_squared_error(actual_all, pred_all) ** 0.5),
+                    "cv_strategy": "group_kfold",
+                    "cv_folds": int(n_splits),
                 }
             )
 
     cv_results = pd.DataFrame(rows).sort_values(["model", "mean_r2", "mean_rmse", "mean_mae"], ascending=[True, False, True, True])
     best_per_model = cv_results.drop_duplicates(subset=["model"], keep="first").sort_values(
-        ["mean_r2", "mean_rmse", "mean_mae"], ascending=[False, True, True]
+        ["oof_r2", "oof_rmse", "oof_mae"], ascending=[False, True, True]
     )
     cv_results.to_csv(output_dir / "model_grid_search_cv.csv", index=False)
     best_per_model.to_csv(output_dir / "model_grid_search_best_per_model.csv", index=False)
@@ -1329,10 +1345,12 @@ def compute_learning_curve_neg_mae(
     n_splits: int = 10,
     random_state: int = 42,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    splitter = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    groups = raw_training_df["group_id"].astype(int)
+    n_splits = min(int(groups.nunique()), n_splits)
+    splitter = GroupKFold(n_splits=n_splits)
     score_rows: list[list[float]] = [[] for _ in fractions]
 
-    for fold_index, (train_idx, val_idx) in enumerate(splitter.split(raw_training_df), start=1):
+    for fold_index, (train_idx, val_idx) in enumerate(splitter.split(raw_training_df, groups=groups), start=1):
         fold_train_raw_all = raw_training_df.iloc[train_idx].copy().reset_index(drop=True)
         fold_val_raw = raw_training_df.iloc[val_idx].copy()
         subset_order = np.random.RandomState(random_state + fold_index * 97).permutation(len(fold_train_raw_all))
@@ -1444,7 +1462,7 @@ def write_summary(
             "## Remaining gaps",
             "- The exact IC/AR/Pol/Ele lookup table is not published, so the calibrated descriptor preset is an informed reconstruction.",
             "- The local pipeline now uses the 5382 single-metal CoRE subset extracted from the official 14142-entry ASR table, which matches the user's requested candidate set but is still not the paper's unpublished 3833 subset.",
-            "- Model selection follows exhaustive parameter search with 10-fold cross-validation and fold-wise train-only preprocessing on the 801-row training dataset; holdout-style grouped evaluation is retained separately for display figures.",
+            "- Model selection follows grouped cross-validation with fold-wise train-only preprocessing on the current local training dataset; holdout-style grouped evaluation is retained separately for display figures.",
         ]
     )
     (OUTPUT_DIR / "reproduction_summary.md").write_text("\n".join(lines), encoding="utf-8")
@@ -1489,7 +1507,7 @@ def run_reproduction(skip_supplementary: bool = False) -> int:
             mode="sequential",
             descriptor_preset="calibrated_mixed",
             mod_encoding="calibrated",
-            group_recipe="paper_43",
+            group_recipe="metal_only",
             train_group_count=39,
         ),
         SplitConfig(
@@ -1497,7 +1515,7 @@ def run_reproduction(skip_supplementary: bool = False) -> int:
             mode="group_shuffle",
             descriptor_preset="calibrated_mixed",
             mod_encoding="calibrated",
-            group_recipe="paper_43",
+            group_recipe="metal_only",
             random_state=24,
         ),
     ]
@@ -1507,7 +1525,7 @@ def run_reproduction(skip_supplementary: bool = False) -> int:
     split_pipes: dict[str, object] = {}
     prepared_splits: dict[str, object] = {}
 
-    display_training_raw = load_training_table("calibrated_mixed", "calibrated", "paper_43")
+    display_training_raw = load_training_table("calibrated_mixed", "calibrated", "metal_only")
     _, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
     strict_group_cv_summary, strict_group_cv_folds, strict_group_cv_groups = evaluate_models_with_group_cv(
