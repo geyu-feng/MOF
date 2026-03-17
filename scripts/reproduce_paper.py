@@ -38,8 +38,11 @@ This workspace now contains a refined local reproduction of:
 def main() -> int:
     parser = argparse.ArgumentParser(description='Reproduce the Cr(VI)-MOF machine learning paper figures and tables.')
     parser.add_argument('--skip-supplementary', action='store_true', help='Skip SHAP supplementary figure generation.')
+    parser.add_argument('--fig3-only', action='store_true', help='Run only the model-selection and Fig. 3 evaluation path.')
     args = parser.parse_args()
-    return run_reproduction(skip_supplementary=args.skip_supplementary)
+    code = run_reproduction(skip_supplementary=args.skip_supplementary, fig3_only=args.fig3_only)
+    update_readme()
+    return code
 
 
 if __name__ == '__main__':
