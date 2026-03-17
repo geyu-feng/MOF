@@ -3,6 +3,13 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ipynb_checkpoints/
+.coverage
+*.log
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+.vscode/
 
 outputs/
 data/interim/
