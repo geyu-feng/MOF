@@ -26,7 +26,6 @@ def run_reproduction(skip_supplementary: bool = False) -> int:
             descriptor_preset="calibrated_mixed",
             mod_encoding="calibrated",
             group_recipe="metal_family",
-            train_group_count=39,
         ),
         SplitConfig(
             name="score_matched",

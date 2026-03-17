@@ -46,7 +46,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning, module="sklearn.i
 
 # --- constants.py ---
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 DATA_XLSX_CANDIDATES = [
     ROOT / "11.xlsx",
