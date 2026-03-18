@@ -33,12 +33,23 @@ def nice_axis_upper(value: float) -> float:
         nice = 10.0
     return nice * magnitude
 
-def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: float = 8.0) -> None:
+def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: float = 9.0) -> None:
     values = list(values)
     if not values:
         return
-    labels = [f"{float(value):.1f}" for value in values]
-    ax.bar_label(bars, labels=labels, padding=2, fontsize=fontsize, color="black")
+    for bar, value in zip(bars, values):
+        ax.annotate(
+            f"{int(round(float(value)))}",
+            xy=(bar.get_x() + bar.get_width() / 2.0, bar.get_height()),
+            xytext=(0, 4),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=fontsize,
+            fontweight="bold",
+            color="black",
+            clip_on=False,
+        )
 
 def prepare_fig2a_structural_data(core_df: pd.DataFrame | None, fi_df: pd.DataFrame) -> pd.DataFrame:
     structural_df = core_df if core_df is not None and not core_df.empty else fi_df.rename(columns={"sa": "sa", "pv": "pv", "pd": "pd", "mpd": "mpd"})
