@@ -33,22 +33,12 @@ def nice_axis_upper(value: float) -> float:
         nice = 10.0
     return nice * magnitude
 
-def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: float = 6.5) -> None:
+def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: float = 8.0) -> None:
     values = list(values)
     if not values:
         return
-    y_max = max(float(v) for v in values)
-    offset = max(y_max * 0.015, 0.25)
-    for bar, value in zip(bars, values):
-        ax.text(
-            bar.get_x() + bar.get_width() / 2.0,
-            bar.get_height() + offset,
-            f"{float(value):.2f}",
-            ha="center",
-            va="bottom",
-            fontsize=fontsize,
-            clip_on=False,
-        )
+    labels = [f"{float(value):.1f}" for value in values]
+    ax.bar_label(bars, labels=labels, padding=2, fontsize=fontsize, color="black")
 
 def prepare_fig2a_structural_data(core_df: pd.DataFrame | None, fi_df: pd.DataFrame) -> pd.DataFrame:
     structural_df = core_df if core_df is not None and not core_df.empty else fi_df.rename(columns={"sa": "sa", "pv": "pv", "pd": "pd", "mpd": "mpd"})
@@ -234,7 +224,8 @@ def save_fig2_like(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, impo
     bars = ax3.bar(ordered["feature"], ordered["reproduced_importance"], color=FIG2_GREEN, edgecolor="black", linewidth=0.5)
     ax3.set_ylabel("Importance (%)")
     ax3.set_title("(c)", pad=2)
-    ax3.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.18)
+    ax3.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.28)
+    ax3.margins(y=0.08)
     style_small_axis(ax3)
     ax3.tick_params(axis="x", rotation=0)
     annotate_bar_values(ax3, bars, ordered["reproduced_importance"])
@@ -266,7 +257,8 @@ def save_fig2c_feature_importance(importance_df: pd.DataFrame, filename: str) ->
     bars = ax.bar(ordered["feature"], ordered["reproduced_importance"], color=FIG2_GREEN, edgecolor="black", linewidth=0.5)
     ax.set_ylabel("Importance (%)")
     ax.set_title("(c)", pad=2)
-    ax.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.18)
+    ax.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.28)
+    ax.margins(y=0.08)
     style_small_axis(ax)
     ax.tick_params(axis="x", rotation=0)
     annotate_bar_values(ax, bars, ordered["reproduced_importance"])
