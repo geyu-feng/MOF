@@ -47,6 +47,7 @@ def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: f
             ha="center",
             va="bottom",
             fontsize=fontsize,
+            clip_on=False,
         )
 
 def prepare_fig2a_structural_data(core_df: pd.DataFrame | None, fi_df: pd.DataFrame) -> pd.DataFrame:
@@ -233,6 +234,7 @@ def save_fig2_like(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, impo
     bars = ax3.bar(ordered["feature"], ordered["reproduced_importance"], color=FIG2_GREEN, edgecolor="black", linewidth=0.5)
     ax3.set_ylabel("Importance (%)")
     ax3.set_title("(c)", pad=2)
+    ax3.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.18)
     style_small_axis(ax3)
     ax3.tick_params(axis="x", rotation=0)
     annotate_bar_values(ax3, bars, ordered["reproduced_importance"])
@@ -264,6 +266,7 @@ def save_fig2c_feature_importance(importance_df: pd.DataFrame, filename: str) ->
     bars = ax.bar(ordered["feature"], ordered["reproduced_importance"], color=FIG2_GREEN, edgecolor="black", linewidth=0.5)
     ax.set_ylabel("Importance (%)")
     ax.set_title("(c)", pad=2)
+    ax.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.18)
     style_small_axis(ax)
     ax.tick_params(axis="x", rotation=0)
     annotate_bar_values(ax, bars, ordered["reproduced_importance"])

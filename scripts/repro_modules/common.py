@@ -551,4 +551,57 @@ def export_target_core_metal_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
     count_df.to_csv(ROOT / "outputs" / "core_target_metal_counts.csv", index=False)
     return subset, count_df
 
+def build_target_core_feature_table(
+    raw_subset: pd.DataFrame,
+    descriptor_preset: str,
+    fit_df: pd.DataFrame,
+    mod_encoding: str,
+) -> pd.DataFrame:
+    # Build the candidate CoRE-MOF feature table used by screening/Fig. 5.
+    out = raw_subset.copy()
+    out = out.rename(columns={"filename": "cif_file", "All_Metals": "metal"}).copy()
+    out["metal"] = out["metal"].astype(str).str.strip()
+    out["pd"] = pd.to_numeric(out["LCD"], errors="coerce")
+    out["pv"] = pd.to_numeric(out["AV_cm3_g"], errors="coerce")
+    out["sa"] = pd.to_numeric(out["ASA_m2_g"], errors="coerce")
+    out["vf"] = pd.to_numeric(out["AV_VF"], errors="coerce")
+    out["ci"] = 300.0
+    out["ad"] = 500.0
+    out["time"] = 720.0
+    out["ph"] = 7.0
+    out["temp"] = 298.0
+    out = sanitize_physical_features(out, fit_df)
+    out["mpd"] = derive_mpd(out["pv"], out["sa"]).fillna(float(fit_df["mpd"].median()))
+    out["modification"] = "Marginalized"
+    out["mod_code"] = np.nan
+    out["mod_strategy"] = SCREENING_MOD_STRATEGY
+    props = out["metal"].map(DESCRIPTOR_PRESETS[descriptor_preset]).apply(pd.Series)
+    out = pd.concat([out, props], axis=1)
+    out["source_file"] = "2019-11-01-ASR-internal_14142.csv"
+    ordered_columns = [
+        "cif_file",
+        "metal",
+        "modification",
+        "mod_code",
+        "mod_strategy",
+        "sa",
+        "mpd",
+        "pd",
+        "pv",
+        "vf",
+        "ci",
+        "ad",
+        "time",
+        "ph",
+        "temp",
+        "ionic_charge",
+        "atomic_radius",
+        "polarizability",
+        "electronegativity",
+        "source_file",
+    ]
+    required_columns = [col for col in ordered_columns if col not in {"modification", "mod_code", "mod_strategy"}]
+    out = out[ordered_columns].dropna(subset=required_columns).reset_index(drop=True)
+    return out
+
 
