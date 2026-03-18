@@ -3,6 +3,9 @@ from __future__ import annotations
 from scripts.repro_modules.common import *
 from scripts.repro_modules.modeling import *
 
+# This module owns all non-Fig.4 figure rendering and figure-adjacent
+# export helpers used by the main reproduction workflow.
+
 # --- main_figures.py ---
 
 def nice_axis_upper(value: float) -> float:
@@ -66,6 +69,7 @@ def style_fig2a_axis(ax, plot_df: pd.DataFrame) -> None:
         axis._axinfo["axisline"]["linewidth"] = 0.8
 
 def save_fig3_like(predictions: dict[str, dict[str, pd.DataFrame]], metrics: pd.DataFrame, filename: str) -> None:
+    # Main-text Fig. 3: six-model fitting/parity panels.
     set_paper_rcparams()
     fig, axes = plt.subplots(2, 3, figsize=(7.1, 6.2))
     display_order = ["RF", "GBDT", "XGB", "LR", "KNN", "SVR"]
@@ -96,6 +100,7 @@ def save_fig3_like(predictions: dict[str, dict[str, pd.DataFrame]], metrics: pd.
     plt.close(fig)
 
 def save_fig5_like(screening_df: pd.DataFrame, filename: str) -> None:
+    # Main-text Fig. 5: structure-performance relationships on first adsorption dataset.
     set_paper_rcparams()
     fig, axes = plt.subplots(2, 2, figsize=(7.1, 4.8))
     panels = [
@@ -178,6 +183,7 @@ def compute_feature_importance_table(pipe: Pipeline, training_df: pd.DataFrame, 
     return out
 
 def save_fig2_like(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, importance_df: pd.DataFrame, filename: str) -> pd.DataFrame:
+    # Main-text Fig. 2 combined panel: (a) structure relation, (b) workflow, (c) feature importance.
     set_paper_rcparams()
     fig = plt.figure(figsize=(7.1, 4.8))
     gs = fig.add_gridspec(2, 2, height_ratios=[1.45, 0.85], width_ratios=[1.1, 1.0])
@@ -221,6 +227,7 @@ def save_fig2_like(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, impo
     return plot_df
 
 def save_fig2a_relationship(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, filename: str) -> None:
+    # Standalone export of Fig. 2(a): 3D structural relationship panel.
     set_paper_rcparams()
     fig = plt.figure(figsize=(4.0, 3.6))
     ax = fig.add_subplot(111, projection="3d")
@@ -233,6 +240,7 @@ def save_fig2a_relationship(core_df: pd.DataFrame | None, fallback_df: pd.DataFr
     plt.close(fig)
 
 def save_fig2c_feature_importance(importance_df: pd.DataFrame, filename: str) -> pd.DataFrame:
+    # Standalone export of Fig. 2(c): feature importance bar chart.
     set_paper_rcparams()
     ordered = importance_df.sort_values("reproduced_importance", ascending=False)
     fig, ax = plt.subplots(figsize=(5.6, 2.7))
@@ -252,6 +260,7 @@ def save_fig2c_feature_importance(importance_df: pd.DataFrame, filename: str) ->
 warnings.filterwarnings("ignore", category=ConvergenceWarning, module="sklearn.impute._iterative")
 
 def save_single_shap_beeswarm(pipe: Pipeline, sample_df: pd.DataFrame, path: Path) -> None:
+    # Supplementary Fig. S5: SHAP beeswarm summary.
     feature_df = sample_df[TRAINING_FEATURES].copy()
     transformed = pipe.named_steps["prep"].transform(feature_df)
     model = pipe.named_steps["model"]
@@ -266,6 +275,7 @@ def save_single_shap_beeswarm(pipe: Pipeline, sample_df: pd.DataFrame, path: Pat
     plt.close()
 
 def save_single_waterfall(pipe: Pipeline, sample_df: pd.DataFrame, sample_index: int, path: Path) -> None:
+    # Supplementary Fig. S6: SHAP waterfall for one selected sample.
     feature_df = sample_df[TRAINING_FEATURES].copy()
     transformed = pipe.named_steps["prep"].transform(feature_df)
     model = pipe.named_steps["model"]
@@ -285,6 +295,7 @@ def save_single_waterfall(pipe: Pipeline, sample_df: pd.DataFrame, sample_index:
     plt.close()
 
 def save_combined_supplementary_figures(pipes: dict[str, Pipeline], test_df: pd.DataFrame, filename_s5: str, filename_s6: str) -> None:
+    # Convenience wrapper used by the main workflow to emit Fig. S5 and Fig. S6 together.
     save_single_shap_beeswarm(pipes["RF"], test_df, OUTPUT_DIR / filename_s5)
     sample_index = int(np.argmax(test_df["q"].to_numpy()))
     save_single_waterfall(pipes["XGB"], test_df, sample_index, OUTPUT_DIR / filename_s6)
@@ -304,6 +315,7 @@ def _load_supplementary_paragraphs(root: Path) -> list[str]:
     return paragraphs
 
 def _export_supplementary_text_sections(root: Path) -> None:
+    # Export supplementary Text S1 and Text S2 as markdown files for local inspection.
     paragraphs = _load_supplementary_paragraphs(root)
     sections = {"Text S1": [], "Text S2": []}
     current = None
@@ -321,6 +333,7 @@ def _export_supplementary_text_sections(root: Path) -> None:
     (OUTPUT_DIR / "textS2_rf_xgb_notes.md").write_text("\n\n".join(sections["Text S2"]).strip(), encoding="utf-8")
 
 def save_figS1_quantitative_distributions(training_df: pd.DataFrame, filename: str) -> None:
+    # Supplementary Fig. S1: quantitative variable distributions.
     set_paper_rcparams()
     columns = [("sa", "SA"), ("pd", "PD"), ("pv", "PV"), ("ci", "CI"), ("ad", "AD"), ("time", "Time"), ("ph", "pH"), ("temp", "Tem")]
     fig, axes = plt.subplots(2, 4, figsize=(7.2, 4.2))
@@ -336,6 +349,7 @@ def save_figS1_quantitative_distributions(training_df: pd.DataFrame, filename: s
     plt.close(fig)
 
 def save_figS2_qualitative_distributions(training_df: pd.DataFrame, filename: str) -> None:
+    # Supplementary Fig. S2: qualitative variable/category distributions.
     set_paper_rcparams()
     fig, axes = plt.subplots(1, 3, figsize=(7.1, 2.8))
 
@@ -368,6 +382,7 @@ def save_figS2_qualitative_distributions(training_df: pd.DataFrame, filename: st
     plt.close(fig)
 
 def save_figS3_correlation_heatmap(training_df: pd.DataFrame, filename: str) -> None:
+    # Supplementary Fig. S3: correlation heatmap of quantitative variables.
     set_paper_rcparams()
     corr_features = ["sa", "mpd", "pd", "pv", "ci", "ad", "time", "ph", "temp"]
     labels = ["SA", "MPD", "PD", "PV", "CI", "AD", "Time", "pH", "Tem"]
@@ -423,6 +438,7 @@ def compute_learning_curve_neg_mae(
     return train_sizes, mean_scores, std_scores
 
 def save_figS4_learning_curve(raw_training_df: pd.DataFrame, model_name: str, model_params: dict[str, object], filename: str) -> None:
+    # Supplementary Fig. S4: learning curve of the current display/best model.
     set_paper_rcparams()
     fractions = np.arange(0.2, 1.0, 0.1)
     train_sizes, cv_scores, cv_stds = compute_learning_curve_neg_mae(raw_training_df, model_name, model_params, fractions)
@@ -443,6 +459,7 @@ def save_figS4_learning_curve(raw_training_df: pd.DataFrame, model_name: str, mo
     plt.close(fig)
 
 def _save_reference_pages(root: Path) -> None:
+    # Helper export: save paper PDF pages locally for visual reference during figure alignment.
     pdf_path = next(root.glob("*.pdf"))
     out_dir = OUTPUT_DIR / "paper_pages"
     out_dir.mkdir(exist_ok=True)
@@ -453,6 +470,7 @@ def _save_reference_pages(root: Path) -> None:
         pix.save(out_dir / f"page_{page_number + 1}.png")
 
 def _save_doc_page_to_text_image(root: Path, pdf_name_pattern: str, page_number: int, out_name: str) -> Path:
+    # Helper export: render one PDF page to an image file for debugging/reference.
     pdf_path = next(root.glob(pdf_name_pattern))
     out_path = OUTPUT_DIR / out_name
     doc = fitz.open(pdf_path)

@@ -4,6 +4,10 @@ from scripts.repro_modules.common import *
 from scripts.repro_modules.modeling import *
 from scripts.repro_modules.plots import *
 
+# Dedicated Fig. 4 workflow module.
+# This file does not only draw the figure; it also prepares the model context,
+# computes PDP data, writes validation/report artifacts, and exports fig4_best.*.
+
 # --- integrated_fig4_module ---
 
 LOGGER = logging.getLogger("fig4_refine")
@@ -133,6 +137,7 @@ def fit_named_models(prepared_training_df: pd.DataFrame, best_per_model: pd.Data
     return fitted
 
 def create_model_context(config: dict[str, Any]) -> ModelContext:
+    # Build the training/model state used specifically by Fig. 4.
     dataset_cfg = config["dataset"]
     output_dir = ROOT / config["output"]["directory"]
     raw_training_df = load_training_table(
@@ -360,6 +365,9 @@ def compute_two_d_panel(
     )
 
 def build_fig4_bundle(config: dict[str, Any], context: ModelContext, model_name: str) -> Fig4DataBundle:
+    # Assemble all six panels of Fig. 4:
+    # (a) 2D PDP for CI x AD
+    # (b)-(f) 1D PDPs for CI, AD, Time, pH, Tem
     model_params = json.loads(context.best_per_model.loc[context.best_per_model["model"] == model_name, "params_json"].iloc[0])
     predictor = context.fitted_models[model_name]
     base_frame = context.prepared_training_df[TRAINING_FEATURES].copy()
@@ -456,6 +464,7 @@ def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, An
     set_axis_style(ax)
 
 def plot_fig4(bundle: Fig4DataBundle, config: dict[str, Any], destination: Path) -> None:
+    # Final renderer for Fig. 4 output files, typically fig4_best.png/pdf/svg.
     set_paper_rcparams()
     plot_cfg = config["plot"]
     fig, axes = plt.subplots(2, 3, figsize=tuple(plot_cfg["figure_size"]))
@@ -470,6 +479,7 @@ def plot_fig4(bundle: Fig4DataBundle, config: dict[str, Any], destination: Path)
     plt.close(fig)
 
 def write_bundle_tables(bundle: Fig4DataBundle, output_dir: Path, stem: str) -> None:
+    # Save the underlying Fig. 4 1D/2D PDP arrays for audit/debugging.
     one_d_rows: list[pd.DataFrame] = []
     for feature_name, panel in bundle.one_d.items():
         one_d_rows.append(
@@ -506,6 +516,7 @@ def evaluate_grouped_generalization(
     n_splits: int,
     label: str,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
+    # Diagnostic validation for the Fig. 4 model context; not a paper figure itself.
     unique_groups = groups.astype(str).nunique()
     n_splits = min(n_splits, unique_groups)
     splitter = GroupKFold(n_splits=n_splits)
@@ -562,6 +573,7 @@ def evaluate_models_with_group_cv(
     tuned_params: dict[str, dict[str, object]],
     n_splits: int | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    # Strict grouped CV diagnostics used by reports and debugging around Fig. 4/modeling.
     groups = raw_training_df["group_id"].astype(int)
     unique_group_count = int(groups.nunique())
     if unique_group_count < 2:
@@ -651,6 +663,7 @@ def write_group_cv_report(
     summary_df: pd.DataFrame,
     group_df: pd.DataFrame,
 ) -> None:
+    # Write strict grouped-CV markdown summary for local review.
     group_overview = (
         raw_training_df.groupby("group_id", as_index=False)
         .agg(
@@ -716,6 +729,7 @@ def save_validation_outputs(
     output_dir: Path,
     stem: str,
 ) -> tuple[list[dict[str, float]], list[str]]:
+    # Export DOI-level and material-family-level validation CSV files for Fig. 4 diagnostics.
     val_cfg = config["external_validation"]
     diagnostics: list[dict[str, float]] = []
     note_lines: list[str] = []
@@ -766,6 +780,7 @@ def save_canonical_and_versioned(destination: Path, canonical_stem: str, output_
             shutil.copyfile(destination, versioned_path)
 
 def cleanup_fig4_outputs(output_dir: Path) -> None:
+    # Keep only the canonical fig4_best.* outputs in the output directory.
     keep = {"fig4_best.png", "fig4_best.pdf", "fig4_best.svg"}
     for path in output_dir.glob("fig4*"):
         if path.name in keep:
@@ -834,6 +849,7 @@ def write_report(
     bundle: Fig4DataBundle,
     validation_notes: list[str],
 ) -> None:
+    # Write Fig. 4专项说明文件: fig4_refine_report.md
     comparison_models = [name for name in config["model_selection"]["comparison_models"] if name in context.fitted_models]
     lines = [
         "# Fig. 4 Refine Report",
@@ -873,6 +889,8 @@ def write_report(
     (output_dir / report_name).write_text("\n".join(lines), encoding="utf-8")
 
 def render_fig4_artifacts(config_path: Path) -> ModelContext:
+    # Public Fig. 4 entrypoint used by the main workflow.
+    # It creates/loads model context, rebuilds fig4_best.*, and returns the context.
     config = load_config(config_path)
     output_dir = ROOT / config["output"]["directory"]
     output_dir.mkdir(exist_ok=True)

@@ -20,6 +20,7 @@ def pick_display_config(metric_frames: dict[str, object]) -> str:
 def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) -> int:
     ensure_output_dir()
     if not fig3_only:
+        # Reference page images are auxiliary debug assets, not paper outputs.
         save_reference_pages()
 
     configs = [
@@ -68,6 +69,7 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
         metrics.to_csv(OUTPUT_DIR / f"model_metrics_{config.name}.csv", index=False)
 
     display_config = pick_display_config(metric_frames)
+    # Main-text Fig. 3
     save_fig3_like(prediction_frames[display_config], metric_frames[display_config], "fig3_fitting_effect.png")
 
     if fig3_only:
@@ -102,20 +104,24 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
         display_training_df,
         best_model_name,
     )
+    # Main-text Fig. 2 combined panel and its standalone (a)/(c) exports.
     save_fig2_like(target_core_df, display_training_df, feature_importance, "fig2_overview.png")
     save_fig2a_relationship(target_core_df, display_training_df, "fig2a_relationship.png")
     save_fig2c_feature_importance(feature_importance, "fig2c_feature_importance.png")
     feature_importance.to_csv(OUTPUT_DIR / "feature_importance.csv", index=False)
 
     export_supplementary_text_sections()
+    # Supplementary Fig. S1-S4
     save_figS1_quantitative_distributions(display_training_raw, "figS1_quantitative_distributions.png")
     save_figS2_qualitative_distributions(display_training_raw, "figS2_qualitative_distributions.png")
     save_figS3_correlation_heatmap(display_training_raw, "figS3_correlation_heatmap.png")
     save_figS4_learning_curve(display_training_raw, best_model_name, tuned_params[best_model_name], "figS4_learning_curve.png")
+    # Main-text Fig. 4 and Fig. 5
     render_fig4_artifacts(ROOT / "config" / "fig4_config.json")
     save_fig5_like(first_adsorption_df, "fig5_structure_relationships.png")
 
     if not skip_supplementary:
+        # Supplementary Fig. S5 and Fig. S6
         test_df = prepared_splits[display_config]["test"].copy()
         save_combined_supplementary_figures(split_pipes[display_config], test_df, "figS5_beeswarm.png", "figS6_waterfall.png")
 
