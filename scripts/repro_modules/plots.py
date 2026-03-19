@@ -33,20 +33,39 @@ def nice_axis_upper(value: float) -> float:
         nice = 10.0
     return nice * magnitude
 
-def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: float = 9.0) -> None:
+def get_fig2c_bar_colors(n_bars: int) -> list[str]:
+    palette = [
+        "#1d3557",
+        "#2a6f97",
+        "#468faf",
+        "#61a5c2",
+        "#89c2d9",
+        "#4d908e",
+        "#43aa8b",
+        "#90be6d",
+        "#a8dadc",
+        "#bde0fe",
+        "#ced4da",
+    ]
+    if n_bars <= len(palette):
+        return palette[:n_bars]
+    repeats = int(np.ceil(n_bars / len(palette)))
+    return (palette * repeats)[:n_bars]
+
+def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: float = 8.5, decimals: int = 1) -> None:
     values = list(values)
     if not values:
         return
     for bar, value in zip(bars, values):
         ax.annotate(
-            f"{int(round(float(value)))}",
+            f"{float(value):.{int(decimals)}f}",
             xy=(bar.get_x() + bar.get_width() / 2.0, bar.get_height()),
             xytext=(0, 4),
             textcoords="offset points",
             ha="center",
             va="bottom",
             fontsize=fontsize,
-            fontweight="bold",
+            fontweight="semibold",
             color="black",
             clip_on=False,
         )
@@ -243,14 +262,20 @@ def save_fig2_like(
 
     ax3 = fig.add_subplot(gs[1, :])
     ordered = importance_df.sort_values("reproduced_importance", ascending=False)
-    bars = ax3.bar(ordered["feature"], ordered["reproduced_importance"], color=FIG2_GREEN, edgecolor="black", linewidth=0.5)
+    bars = ax3.bar(
+        ordered["feature"],
+        ordered["reproduced_importance"],
+        color=get_fig2c_bar_colors(len(ordered)),
+        edgecolor="#2f3e46",
+        linewidth=0.5,
+    )
     ax3.set_ylabel("Importance (%)")
     ax3.set_title("(c)", pad=2)
     ax3.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.28)
     ax3.margins(y=0.08)
     style_small_axis(ax3)
     ax3.tick_params(axis="x", rotation=0)
-    annotate_bar_values(ax3, bars, ordered["reproduced_importance"])
+    annotate_bar_values(ax3, bars, ordered["reproduced_importance"], decimals=1)
 
     fig.subplots_adjust(left=0.06, right=0.98, top=0.96, bottom=0.16, wspace=0.15, hspace=0.28)
     add_caption(fig, "Fig. 2. Structural overview, workflow, and feature importance.")
@@ -276,15 +301,20 @@ def save_fig2c_feature_importance(importance_df: pd.DataFrame, filename: str) ->
     set_paper_rcparams()
     ordered = importance_df.sort_values("reproduced_importance", ascending=False)
     fig, ax = plt.subplots(figsize=(5.6, 2.7))
-    bars = ax.bar(ordered["feature"], ordered["reproduced_importance"], color=FIG2_GREEN, edgecolor="black", linewidth=0.5)
+    bars = ax.bar(
+        ordered["feature"],
+        ordered["reproduced_importance"],
+        color=get_fig2c_bar_colors(len(ordered)),
+        edgecolor="#2f3e46",
+        linewidth=0.5,
+    )
     ax.set_ylabel("Importance (%)")
-    ax.set_title("(c)", pad=2)
     ax.set_ylim(0, float(ordered["reproduced_importance"].max()) * 1.28)
     ax.margins(y=0.08)
     style_small_axis(ax)
     ax.tick_params(axis="x", rotation=0)
-    annotate_bar_values(ax, bars, ordered["reproduced_importance"])
-    fig.subplots_adjust(left=0.08, right=0.99, top=0.92, bottom=0.22)
+    annotate_bar_values(ax, bars, ordered["reproduced_importance"], decimals=1)
+    fig.subplots_adjust(left=0.08, right=0.99, top=0.98, bottom=0.22)
     fig.savefig(OUTPUT_DIR / filename, dpi=300)
     plt.close(fig)
     return ordered
