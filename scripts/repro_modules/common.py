@@ -378,6 +378,43 @@ def resolve_data_xlsx() -> Path:
     searched = ", ".join(str(path.name) for path in DATA_XLSX_CANDIDATES)
     raise FileNotFoundError(f"No training workbook found. Checked: {searched}")
 
+def validate_group_count(raw_df: pd.DataFrame, context: str, minimum: int = 2) -> int:
+    group_count = int(raw_df["group_id"].nunique())
+    if group_count < minimum:
+        raise ValueError(f"{context} requires at least {minimum} distinct groups, got {group_count}.")
+    return group_count
+
+def encode_modification_codes(modifications: pd.Series, mod_encoding: str) -> tuple[pd.Series, dict[str, int], list[str]]:
+    preset_mapping = MOD_ENCODING_PRESETS[mod_encoding].copy()
+    normalized = (
+        modifications.fillna("Unknown")
+        .astype(str)
+        .str.strip()
+        .replace("", "Unknown")
+    )
+    codes = normalized.map(preset_mapping)
+    unknown_values = sorted(normalized.loc[codes.isna()].unique().tolist())
+    if unknown_values:
+        next_code = max(preset_mapping.values(), default=-1) + 1
+        for value in unknown_values:
+            preset_mapping[value] = next_code
+            next_code += 1
+        warnings.warn(
+            f"Unknown modification categories encountered and dynamically encoded: {', '.join(unknown_values)}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        codes = normalized.map(preset_mapping)
+    return codes.astype(int), preset_mapping, unknown_values
+
+def get_mod_plot_label(name: str) -> str:
+    if name in MOD_LABELS:
+        return MOD_LABELS[name]
+    alnum = re.sub(r"[^A-Za-z0-9]+", "", str(name))
+    if not alnum:
+        return "OT"
+    return alnum[:4].upper()
+
 def prepare_model_table(df: pd.DataFrame, fit_df: pd.DataFrame | None = None) -> pd.DataFrame:
     """Apply the paper-style preprocessing pipeline with train-only fitted state."""
     fit_df = df if fit_df is None else fit_df
@@ -453,8 +490,13 @@ def load_training_table(descriptor_preset: str, mod_encoding: str, group_recipe:
     df["group_id"] = group_id
 
     props = df["metal"].map(DESCRIPTOR_PRESETS[descriptor_preset]).apply(pd.Series)
+    if props.isna().all(axis=1).any():
+        unknown_metals = sorted(df.loc[props.isna().all(axis=1), "metal"].dropna().astype(str).unique().tolist())
+        raise ValueError(
+            f"Descriptor preset '{descriptor_preset}' does not cover metals: {', '.join(unknown_metals)}"
+        )
     df = pd.concat([df, props], axis=1)
-    df["mod_code"] = df["modification"].map(MOD_ENCODING_PRESETS[mod_encoding]).astype(int)
+    df["mod_code"], _, _ = encode_modification_codes(df["modification"], mod_encoding)
     df["mpd"] = derive_mpd(df["pv"], df["sa"])
     return df
 

@@ -386,7 +386,8 @@ def save_figS2_qualitative_distributions(training_df: pd.DataFrame, filename: st
 
     mod_counts = training_df["modification"].value_counts()
     mod_order = [name for name in MOD_ORDER if name in mod_counts.index]
-    mod_labels = [MOD_LABELS[name] for name in mod_order]
+    mod_order.extend([name for name in mod_counts.index if name not in mod_order])
+    mod_labels = [get_mod_plot_label(name) for name in mod_order]
     mod_colors = [S2_MOD_COLORS.get(label, "#74c476") for label in mod_labels]
     axes[1].bar(mod_labels, mod_counts.reindex(mod_order).to_numpy(), color=mod_colors, edgecolor="white", linewidth=0.6)
     axes[1].set_xlabel("ModM")

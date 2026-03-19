@@ -13,12 +13,33 @@ from scripts.repro_modules.plots import _export_supplementary_text_sections, _lo
 def ensure_output_dir() -> None:
     OUTPUT_DIR.mkdir(exist_ok=True)
 
+def isolate_fig3_only_outputs() -> None:
+    keep_names = {
+        "model_grid_search_cv.csv",
+        "model_grid_search_best_per_model.csv",
+        "model_metrics_paper_faithful.csv",
+        "model_metrics_score_matched.csv",
+        "fig3_fitting_effect.png",
+    }
+    removable_suffixes = {".png", ".pdf", ".svg", ".csv", ".md", ".json", ".log"}
+    for path in OUTPUT_DIR.iterdir():
+        if path.is_dir():
+            if path.name in {"paper_pages", "supp_media"}:
+                shutil.rmtree(path, ignore_errors=True)
+            continue
+        if path.name in keep_names:
+            continue
+        if path.suffix.lower() in removable_suffixes:
+            path.unlink(missing_ok=True)
+
 def pick_display_config(metric_frames: dict[str, object]) -> str:
     scored = {name: score_metric_frame(frame) for name, frame in metric_frames.items()}
     return min(scored, key=scored.get)
 
 def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) -> int:
     ensure_output_dir()
+    if fig3_only:
+        isolate_fig3_only_outputs()
     if not fig3_only:
         # Reference page images are auxiliary debug assets, not paper outputs.
         save_reference_pages()
@@ -46,7 +67,12 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
     split_pipes: dict[str, object] = {}
     prepared_splits: dict[str, object] = {}
 
-    display_training_raw = load_training_table("calibrated_mixed", "calibrated", "metal_family")
+    display_basis_config = configs[0]
+    display_training_raw = load_training_table(
+        display_basis_config.descriptor_preset,
+        display_basis_config.mod_encoding,
+        display_basis_config.group_recipe,
+    )
     _, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
     if not fig3_only:

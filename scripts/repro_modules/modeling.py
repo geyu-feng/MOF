@@ -79,6 +79,7 @@ def build_preprocessor(feature_columns: Iterable[str]) -> ColumnTransformer:
     )
 
 def build_group_cv_folds(raw_df: pd.DataFrame, n_splits: int = 10) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
+    validate_group_count(raw_df, "GroupKFold model selection", minimum=2)
     splitter = GroupKFold(n_splits=n_splits)
     folds: list[tuple[pd.DataFrame, pd.DataFrame]] = []
     for train_idx, val_idx in splitter.split(raw_df, groups=raw_df["group_id"]):
@@ -108,7 +109,8 @@ def recommend_test_group_count(n_groups: int) -> int:
     return max(1, int(round(n_groups * 0.15)))
 
 def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
-    n_splits = min(10, int(raw_df["group_id"].nunique()))
+    group_count = validate_group_count(raw_df, "Grouped model selection", minimum=2)
+    n_splits = min(10, group_count)
     folds = build_group_cv_folds(raw_df, n_splits=n_splits)
     rows: list[dict[str, object]] = []
 
@@ -169,6 +171,10 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
 def make_split(df: pd.DataFrame, config) -> SplitBundle:
     groups = pd.Series(df["group_id"])
     unique_groups = pd.Index(groups.drop_duplicates())
+    if len(unique_groups) < 2:
+        raise ValueError(
+            f"Split config '{config.name}' requires at least 2 distinct groups, got {len(unique_groups)}."
+        )
     recommended_test_groups = recommend_test_group_count(len(unique_groups))
 
     if config.mode == "sequential":

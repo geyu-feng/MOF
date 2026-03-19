@@ -98,6 +98,18 @@ def build_output_tag(config: dict[str, Any], model_name: str, params: dict[str, 
         ]
     )
 
+def build_model_selection_signature(config: dict[str, Any]) -> str:
+    payload = {
+        "dataset": config["dataset"],
+        "model_selection": config["model_selection"],
+        "model_order": MODEL_ORDER,
+        "param_grids": get_model_param_grids(),
+        "common_source_sha1": hashlib.sha1((ROOT / "scripts" / "repro_modules" / "common.py").read_bytes()).hexdigest(),
+        "modeling_source_sha1": hashlib.sha1((ROOT / "scripts" / "repro_modules" / "modeling.py").read_bytes()).hexdigest(),
+        "fig4_source_sha1": hashlib.sha1((ROOT / "scripts" / "repro_modules" / "fig4.py").read_bytes()).hexdigest(),
+    }
+    return hashlib.sha1(stable_json(payload).encode("utf-8")).hexdigest()
+
 def model_selection_cache_meta_path(output_dir: Path) -> Path:
     return output_dir / "fig4_model_selection_cache.json"
 
@@ -106,6 +118,7 @@ def write_model_selection_cache_meta(output_dir: Path, config: dict[str, Any], r
         "dataset": config["dataset"],
         "config_version": config["version"],
         "training_fingerprint": dataframe_fingerprint(raw_training_df),
+        "selection_signature": build_model_selection_signature(config),
     }
     model_selection_cache_meta_path(output_dir).write_text(stable_json(meta), encoding="utf-8")
 
@@ -121,6 +134,7 @@ def is_model_selection_cache_valid(output_dir: Path, config: dict[str, Any], raw
         meta.get("dataset") == config["dataset"]
         and meta.get("config_version") == config["version"]
         and meta.get("training_fingerprint") == dataframe_fingerprint(raw_training_df)
+        and meta.get("selection_signature") == build_model_selection_signature(config)
     )
 
 def fit_named_models(prepared_training_df: pd.DataFrame, best_per_model: pd.DataFrame, model_names: list[str]) -> dict[str, Pipeline]:
@@ -251,9 +265,19 @@ def compute_partial_dependence_2d(
     return surface
 
 def fit_uncertainty_ensemble(raw_training_df: pd.DataFrame, model_name: str, model_params: dict[str, Any], n_splits: int) -> list[Pipeline]:
-    splitter = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    group_count = int(raw_training_df["group_id"].nunique())
+    if group_count < 2:
+        fold_train = prepare_model_table(raw_training_df, fit_df=raw_training_df)
+        pipe = Pipeline(
+            [("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, model_params))]
+        )
+        pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
+        LOGGER.warning("Fig. 4 uncertainty ensemble fell back to a single full-data fit because only one group was available.")
+        return [pipe]
+    n_splits = min(int(n_splits), group_count)
+    splitter = GroupKFold(n_splits=n_splits)
     ensemble: list[Pipeline] = []
-    for fold_index, (train_idx, _) in enumerate(splitter.split(raw_training_df), start=1):
+    for fold_index, (train_idx, _) in enumerate(splitter.split(raw_training_df, groups=raw_training_df["group_id"]), start=1):
         fold_train_raw = raw_training_df.iloc[train_idx].copy()
         fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
         pipe = Pipeline(
