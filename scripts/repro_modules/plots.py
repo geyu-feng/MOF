@@ -200,7 +200,13 @@ def compute_feature_importance_table(pipe: Pipeline, training_df: pd.DataFrame, 
     out["importance_source"] = importance_source
     return out
 
-def save_fig2_like(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, importance_df: pd.DataFrame, filename: str) -> pd.DataFrame:
+def save_fig2_like(
+    core_df: pd.DataFrame | None,
+    fallback_df: pd.DataFrame,
+    importance_df: pd.DataFrame,
+    filename: str,
+    workflow_counts: dict[str, int] | None = None,
+) -> pd.DataFrame:
     # Main-text Fig. 2 combined panel: (a) structure relation, (b) workflow, (c) feature importance.
     set_paper_rcparams()
     fig = plt.figure(figsize=(7.1, 4.8))
@@ -213,12 +219,17 @@ def save_fig2_like(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, impo
     ax1.set_title("(a)", pad=-10)
 
     ax2 = fig.add_subplot(gs[0, 1])
+    workflow_counts = {} if workflow_counts is None else workflow_counts
+    training_rows = int(workflow_counts.get("training_rows", len(fallback_df)))
+    model_count = int(workflow_counts.get("model_count", len(MODEL_ORDER)))
+    candidate_rows = int(workflow_counts.get("candidate_rows", 0 if core_df is None else len(core_df)))
+    initial_rows = int(workflow_counts.get("initial_rows", 0))
     steps = [
-        ("801\nliterature\nrecords", (0.18, 0.83)),
-        ("6 model\ncomparison", (0.52, 0.83)),
-        ("5382 CoRE\ncandidates", (0.84, 0.83)),
+        (f"{training_rows}\nliterature\nrecords", (0.18, 0.83)),
+        (f"{model_count} model\ncomparison", (0.52, 0.83)),
+        (f"{candidate_rows} CoRE\ncandidates", (0.84, 0.83)),
         ("Top 10 per\nmetal", (0.36, 0.40)),
-        ("70 initial\nscreening", (0.66, 0.40)),
+        (f"{initial_rows} initial\nscreening", (0.66, 0.40)),
     ]
     for text, (x, y) in steps:
         ax2.text(x, y, text, ha="center", va="center", fontsize=7, bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="black", lw=0.8))

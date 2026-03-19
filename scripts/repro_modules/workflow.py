@@ -130,8 +130,20 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
         display_training_df,
         best_model_name,
     )
+    fig2_workflow_counts = {
+        "training_rows": len(display_training_raw),
+        "model_count": len(MODEL_ORDER),
+        "candidate_rows": len(target_core_df),
+        "initial_rows": len(initial_screening_df),
+    }
     # Main-text Fig. 2 combined panel and its standalone (a)/(c) exports.
-    save_fig2_like(target_core_df, display_training_df, feature_importance, "fig2_overview.png")
+    save_fig2_like(
+        target_core_df,
+        display_training_df,
+        feature_importance,
+        "fig2_overview.png",
+        workflow_counts=fig2_workflow_counts,
+    )
     save_fig2a_relationship(target_core_df, display_training_df, "fig2a_relationship.png")
     save_fig2c_feature_importance(feature_importance, "fig2c_feature_importance.png")
     feature_importance.to_csv(OUTPUT_DIR / "feature_importance.csv", index=False)

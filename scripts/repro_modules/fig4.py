@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from scripts.repro_modules.common import *
 from scripts.repro_modules.modeling import *
+from scripts.repro_modules.modeling import _run_model_grid_search_cv
 from scripts.repro_modules.plots import *
 
 # Dedicated Fig. 4 workflow module.
@@ -168,7 +169,7 @@ def create_model_context(config: dict[str, Any]) -> ModelContext:
         best_per_model = pd.read_csv(best_per_model_path)
         LOGGER.info("Reused existing model-selection CSV outputs for Fig. 4 refinement.")
     else:
-        cv_results, best_per_model, _, prepared_training_df = run_model_grid_search_cv(raw_training_df)
+        cv_results, best_per_model, _, prepared_training_df = _run_model_grid_search_cv(raw_training_df, output_dir)
         write_model_selection_cache_meta(output_dir, config, raw_training_df)
         LOGGER.info("Wrote model-selection cache metadata for the current training fingerprint.")
     needed_models = [str(best_per_model.iloc[0]["model"])]
