@@ -48,10 +48,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning, module="sklearn.i
 
 ROOT = Path(__file__).resolve().parents[2]
 
-DATA_XLSX_CANDIDATES = [
-    ROOT / "11.xlsx",
-    ROOT / "1-s2.0-S002197972400328X-mmc2.xlsx",
-]
+PRIMARY_DATA_XLSX = ROOT / "11.xlsx"
 
 OUTPUT_DIR = ROOT / "outputs"
 
@@ -372,11 +369,9 @@ def derive_mpd(pv: pd.Series, sa: pd.Series) -> pd.Series:
     return mpd.replace([np.inf, -np.inf], np.nan)
 
 def resolve_data_xlsx() -> Path:
-    for path in DATA_XLSX_CANDIDATES:
-        if path.exists():
-            return path
-    searched = ", ".join(str(path.name) for path in DATA_XLSX_CANDIDATES)
-    raise FileNotFoundError(f"No training workbook found. Checked: {searched}")
+    if PRIMARY_DATA_XLSX.exists():
+        return PRIMARY_DATA_XLSX
+    raise FileNotFoundError(f"Training workbook not found: {PRIMARY_DATA_XLSX.name}")
 
 def validate_group_count(raw_df: pd.DataFrame, context: str, minimum: int = 2) -> int:
     group_count = int(raw_df["group_id"].nunique())
