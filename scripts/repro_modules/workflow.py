@@ -6,7 +6,7 @@ from scripts.repro_modules.plots import *
 from scripts.repro_modules.reporting import *
 from scripts.repro_modules.fig4 import *
 from scripts.repro_modules.modeling import _run_model_grid_search_cv
-from scripts.repro_modules.plots import _export_supplementary_text_sections, _load_supplementary_paragraphs, _save_doc_page_to_text_image, _save_reference_pages
+from scripts.repro_modules.plots import _export_supplementary_text_sections, _load_supplementary_paragraphs
 
 # --- workflow ---
 
@@ -24,8 +24,7 @@ def isolate_fig3_only_outputs() -> None:
     removable_suffixes = {".png", ".pdf", ".svg", ".csv", ".md", ".json", ".log"}
     for path in OUTPUT_DIR.iterdir():
         if path.is_dir():
-            if path.name in {"paper_pages", "supp_media"}:
-                shutil.rmtree(path, ignore_errors=True)
+            shutil.rmtree(path, ignore_errors=True)
             continue
         if path.name in keep_names:
             continue
@@ -40,9 +39,6 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
     ensure_output_dir()
     if fig3_only:
         isolate_fig3_only_outputs()
-    if not fig3_only:
-        # Reference page images are auxiliary debug assets, not paper outputs.
-        save_reference_pages()
 
     configs = [
         SplitConfig(
@@ -184,14 +180,6 @@ def load_supplementary_paragraphs() -> list[str]:
 
 def export_supplementary_text_sections() -> None:
     _export_supplementary_text_sections(ROOT)
-
-
-def save_reference_pages() -> None:
-    _save_reference_pages(ROOT)
-
-
-def save_doc_page_to_text_image(pdf_name_pattern: str, page_number: int, out_name: str) -> Path:
-    return _save_doc_page_to_text_image(ROOT, pdf_name_pattern, page_number, out_name)
 
 
 

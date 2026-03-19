@@ -494,25 +494,5 @@ def save_figS4_learning_curve(raw_training_df: pd.DataFrame, model_name: str, mo
     fig.savefig(OUTPUT_DIR / filename, dpi=300)
     plt.close(fig)
 
-def _save_reference_pages(root: Path) -> None:
-    # Helper export: save paper PDF pages locally for visual reference during figure alignment.
-    pdf_path = next(root.glob("*.pdf"))
-    out_dir = OUTPUT_DIR / "paper_pages"
-    out_dir.mkdir(exist_ok=True)
-    doc = fitz.open(pdf_path)
-    for page_number in [5, 6, 7]:
-        page = doc[page_number]
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-        pix.save(out_dir / f"page_{page_number + 1}.png")
-
-def _save_doc_page_to_text_image(root: Path, pdf_name_pattern: str, page_number: int, out_name: str) -> Path:
-    # Helper export: render one PDF page to an image file for debugging/reference.
-    pdf_path = next(root.glob(pdf_name_pattern))
-    out_path = OUTPUT_DIR / out_name
-    doc = fitz.open(pdf_path)
-    page = doc[page_number]
-    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-    pix.save(out_path)
-    return out_path
 
 
