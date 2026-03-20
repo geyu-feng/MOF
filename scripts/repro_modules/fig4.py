@@ -191,6 +191,30 @@ def create_model_context(config: dict[str, Any]) -> ModelContext:
         output_tag=output_tag,
     )
 
+def build_model_context_from_workflow(
+    config: dict[str, Any],
+    raw_training_df: pd.DataFrame,
+    cv_results: pd.DataFrame,
+    best_per_model: pd.DataFrame,
+    fitted_models: dict[str, Pipeline],
+    prepared_training_df: pd.DataFrame,
+) -> ModelContext:
+    best_row = best_per_model.iloc[0]
+    best_model_name = str(best_row["model"])
+    best_model_params = json.loads(best_row["params_json"])
+    output_tag = build_output_tag(config, best_model_name, best_model_params)
+    LOGGER.info("Reused main workflow best model %s for Fig. 4.", best_model_name)
+    return ModelContext(
+        raw_training_df=raw_training_df,
+        prepared_training_df=prepared_training_df,
+        cv_results=cv_results,
+        best_per_model=best_per_model,
+        fitted_models=fitted_models,
+        best_model_name=best_model_name,
+        best_model_params=best_model_params,
+        output_tag=output_tag,
+    )
+
 def versioned_stem(stem: str, output_tag: str) -> str:
     return f"{stem}_{output_tag}"
 
@@ -473,19 +497,8 @@ def build_contour_levels(surface: np.ndarray, n_levels: int) -> np.ndarray:
     return levels
 
 def plot_two_d_panel(ax: plt.Axes, panel: TwoDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
-    fill_levels = build_contour_levels(panel.z, int(plot_cfg["contourf_levels"]))
-    line_levels = build_contour_levels(panel.z, int(plot_cfg["contour_levels"]))
-    ax.contourf(panel.x_grid, panel.y_grid, panel.z, levels=fill_levels, cmap=plot_cfg["colormap"], antialiased=False)
-    contour = ax.contour(
-        panel.x_grid,
-        panel.y_grid,
-        panel.z,
-        levels=line_levels,
-        colors="black",
-        linewidths=plot_cfg["contour_line_width"],
-        alpha=0.65,
-    )
-    ax.clabel(contour, inline=True, fontsize=plot_cfg["contour_label_fontsize"], fmt="%.2f")
+    xx, yy = np.meshgrid(panel.x_grid, panel.y_grid)
+    ax.pcolormesh(xx, yy, panel.z, cmap=plot_cfg["colormap"], shading="nearest")
     ax.set_xlim(float(np.min(panel.x_grid)), float(np.max(panel.x_grid)))
     ax.set_ylim(float(np.min(panel.y_grid)), float(np.max(panel.y_grid)))
     ax.set_xlabel(panel_cfg["xlabel"])
@@ -938,13 +951,37 @@ def write_report(
     ]
     (output_dir / report_name).write_text("\n".join(lines), encoding="utf-8")
 
-def render_fig4_artifacts(config_path: Path) -> ModelContext:
+def render_fig4_artifacts(
+    config_path: Path,
+    *,
+    raw_training_df: pd.DataFrame | None = None,
+    cv_results: pd.DataFrame | None = None,
+    best_per_model: pd.DataFrame | None = None,
+    fitted_models: dict[str, Pipeline] | None = None,
+    prepared_training_df: pd.DataFrame | None = None,
+) -> ModelContext:
     # Public Fig. 4 entrypoint used by the main workflow.
     # It creates/loads model context, rebuilds fig4_best.*, and returns the context.
     config = load_config(config_path)
     output_dir = ROOT / config["output"]["directory"]
     output_dir.mkdir(exist_ok=True)
-    context = create_model_context(config)
+    if (
+        raw_training_df is not None
+        and cv_results is not None
+        and best_per_model is not None
+        and fitted_models is not None
+        and prepared_training_df is not None
+    ):
+        context = build_model_context_from_workflow(
+            config,
+            raw_training_df,
+            cv_results,
+            best_per_model,
+            fitted_models,
+            prepared_training_df,
+        )
+    else:
+        context = create_model_context(config)
     cleanup_fig4_outputs(output_dir)
     best_bundle = build_fig4_bundle(config, context, context.best_model_name)
     formats = [".png"]

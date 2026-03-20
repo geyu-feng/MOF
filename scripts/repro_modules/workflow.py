@@ -69,7 +69,7 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
         display_basis_config.mod_encoding,
         display_basis_config.group_recipe,
     )
-    _, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
+    cv_results_df, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
     if not fig3_only:
         strict_group_cv_summary, strict_group_cv_folds, strict_group_cv_groups = evaluate_models_with_group_cv(
@@ -151,7 +151,14 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
     save_figS3_correlation_heatmap(display_training_raw, "figS3_correlation_heatmap.png")
     save_figS4_learning_curve(display_training_raw, best_model_name, tuned_params[best_model_name], "figS4_learning_curve.png")
     # Main-text Fig. 4 and Fig. 5
-    render_fig4_artifacts(ROOT / "config" / "fig4_config.json")
+    render_fig4_artifacts(
+        ROOT / "config" / "fig4_config.json",
+        raw_training_df=display_training_raw,
+        cv_results=cv_results_df,
+        best_per_model=cv_best_df,
+        fitted_models=tuned_full_pipes,
+        prepared_training_df=display_training_df,
+    )
     save_fig5_like(first_adsorption_df, "fig5_structure_relationships.png")
 
     if not skip_supplementary:
