@@ -307,6 +307,27 @@ def compute_rug_values(training_df: pd.DataFrame, feature_name: str, limits: tup
 def build_linear_grid(limits: tuple[float, float], n_points: int) -> np.ndarray:
     return np.linspace(float(limits[0]), float(limits[1]), int(n_points), dtype=float)
 
+def build_quantile_grid(values: np.ndarray, limits: tuple[float, float], n_points: int) -> np.ndarray:
+    lo = float(limits[0])
+    hi = float(limits[1])
+    if values.size == 0:
+        return build_linear_grid(limits, n_points)
+    clipped = values[(values >= lo) & (values <= hi)]
+    if clipped.size == 0:
+        return build_linear_grid(limits, n_points)
+    unique_values = np.unique(clipped.astype(float))
+    if unique_values.size <= int(n_points) - 2:
+        grid = np.concatenate(([lo], unique_values, [hi]))
+    else:
+        quantiles = np.linspace(0.0, 1.0, max(int(n_points) - 2, 2), dtype=float)
+        quantile_grid = np.quantile(clipped, quantiles)
+        grid = np.concatenate(([lo], quantile_grid.astype(float), [hi]))
+    grid = np.clip(grid, lo, hi)
+    grid = np.unique(grid.astype(float))
+    if grid.size < 2:
+        return build_linear_grid(limits, n_points)
+    return grid
+
 def build_one_d_grid(
     training_df: pd.DataFrame,
     feature_name: str,
@@ -314,18 +335,7 @@ def build_one_d_grid(
     n_points: int,
 ) -> np.ndarray:
     values = compute_rug_values(training_df, feature_name, limits)
-    if values.size == 0:
-        return build_linear_grid(limits, n_points)
-    unique_values = np.unique(values)
-    if unique_values.size <= int(n_points):
-        return unique_values.astype(float)
-    quantiles = np.linspace(0.0, 1.0, int(n_points), dtype=float)
-    quantile_grid = np.quantile(values, quantiles)
-    clipped_grid = np.clip(quantile_grid, float(limits[0]), float(limits[1]))
-    unique_grid = np.unique(clipped_grid.astype(float))
-    if unique_grid.size < 2:
-        return build_linear_grid(limits, n_points)
-    return unique_grid
+    return build_quantile_grid(values, limits, n_points)
 
 def compute_one_d_panel(
     predictor: Pipeline,
@@ -354,15 +364,20 @@ def compute_two_d_panel(
     predictor: Pipeline,
     ensemble: list[Pipeline],
     base_frame: pd.DataFrame,
+    training_df: pd.DataFrame,
     panel_cfg: dict[str, Any],
 ) -> TwoDPanelData:
-    x_grid = build_linear_grid(tuple(panel_cfg["xlim"]), panel_cfg["x_points"])
-    y_grid = build_linear_grid(tuple(panel_cfg["ylim"]), panel_cfg["y_points"])
+    x_feature = panel_cfg["x_feature"]
+    y_feature = panel_cfg["y_feature"]
+    x_values = compute_rug_values(training_df, x_feature, tuple(panel_cfg["xlim"]))
+    y_values = compute_rug_values(training_df, y_feature, tuple(panel_cfg["ylim"]))
+    x_grid = build_quantile_grid(x_values, tuple(panel_cfg["xlim"]), panel_cfg["x_points"])
+    y_grid = build_quantile_grid(y_values, tuple(panel_cfg["ylim"]), panel_cfg["y_points"])
     point_surface = compute_partial_dependence_2d(
         predictor,
         base_frame,
-        panel_cfg["x_feature"],
-        panel_cfg["y_feature"],
+        x_feature,
+        y_feature,
         x_grid,
         y_grid,
     )
@@ -370,8 +385,8 @@ def compute_two_d_panel(
         compute_partial_dependence_2d(
             model,
             base_frame,
-            panel_cfg["x_feature"],
-            panel_cfg["y_feature"],
+            x_feature,
+            y_feature,
             x_grid,
             y_grid,
         )
@@ -409,7 +424,7 @@ def build_fig4_bundle(config: dict[str, Any], context: ModelContext, model_name:
         "ph": compute_one_d_panel(predictor, ensemble, base_frame, context.prepared_training_df, "ph", config["panels"]["ph"]),
         "temp": compute_one_d_panel(predictor, ensemble, base_frame, context.prepared_training_df, "temp", config["panels"]["temp"]),
     }
-    two_d = compute_two_d_panel(predictor, ensemble, base_frame, config["panels"]["ci_ad"])
+    two_d = compute_two_d_panel(predictor, ensemble, base_frame, context.prepared_training_df, config["panels"]["ci_ad"])
     return Fig4DataBundle(model_name=model_name, model_params=model_params, two_d=two_d, one_d=one_d)
 
 def set_axis_style(ax: plt.Axes) -> None:
