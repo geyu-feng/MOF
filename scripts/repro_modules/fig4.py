@@ -463,9 +463,18 @@ def apply_axis_ticks(ax: plt.Axes, panel_cfg: dict[str, Any], axis: str) -> None
         else:
             ax.yaxis.set_major_locator(locator)
 
+def build_contour_levels(surface: np.ndarray, n_levels: int) -> np.ndarray:
+    flattened = np.asarray(surface, dtype=float).ravel()
+    quantiles = np.linspace(0.0, 1.0, int(n_levels), dtype=float)
+    levels = np.quantile(flattened, quantiles)
+    levels = np.unique(levels.astype(float))
+    if levels.size < 2:
+        levels = np.linspace(float(np.min(flattened)), float(np.max(flattened)) + 1e-9, max(int(n_levels), 2))
+    return levels
+
 def plot_two_d_panel(ax: plt.Axes, panel: TwoDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
-    fill_levels = np.linspace(float(np.min(panel.z)), float(np.max(panel.z)), int(plot_cfg["contourf_levels"]))
-    line_levels = np.linspace(float(np.min(panel.z)), float(np.max(panel.z)), int(plot_cfg["contour_levels"]))
+    fill_levels = build_contour_levels(panel.z, int(plot_cfg["contourf_levels"]))
+    line_levels = build_contour_levels(panel.z, int(plot_cfg["contour_levels"]))
     ax.contourf(panel.x_grid, panel.y_grid, panel.z, levels=fill_levels, cmap=plot_cfg["colormap"], antialiased=False)
     contour = ax.contour(
         panel.x_grid,
@@ -477,8 +486,8 @@ def plot_two_d_panel(ax: plt.Axes, panel: TwoDPanelData, panel_cfg: dict[str, An
         alpha=0.65,
     )
     ax.clabel(contour, inline=True, fontsize=plot_cfg["contour_label_fontsize"], fmt="%.2f")
-    ax.set_xlim(*panel_cfg["xlim"])
-    ax.set_ylim(*panel_cfg["ylim"])
+    ax.set_xlim(float(np.min(panel.x_grid)), float(np.max(panel.x_grid)))
+    ax.set_ylim(float(np.min(panel.y_grid)), float(np.max(panel.y_grid)))
     ax.set_xlabel(panel_cfg["xlabel"])
     ax.set_ylabel(panel_cfg["ylabel"])
     ax.set_title(letter, pad=2)
@@ -494,7 +503,8 @@ def infer_y_limits(curve: np.ndarray, panel_cfg: dict[str, Any]) -> tuple[float,
 
 def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
     ax.step(panel.x, panel.y, where="mid", color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
-    ax.set_xlim(*panel_cfg["xlim"])
+    ax.plot(panel.x, panel.y, linestyle="none", marker="o", markersize=2.4, color=plot_cfg["line_color"], zorder=2.2)
+    ax.set_xlim(float(np.min(panel.x)), float(np.max(panel.x)))
     ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
     ax.set_xlabel(panel_cfg["xlabel"])
     ax.set_ylabel(panel_cfg["ylabel"])
