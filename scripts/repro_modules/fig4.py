@@ -299,7 +299,7 @@ def fit_uncertainty_ensemble(raw_training_df: pd.DataFrame, model_name: str, mod
         pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
         LOGGER.warning("Fig. 4 uncertainty ensemble fell back to a single full-data fit because only one group was available.")
         return [pipe]
-    n_splits = min(int(n_splits), group_count)
+    n_splits = min(int(n_splits), choose_group_cv_splits(group_count))
     splitter = GroupKFold(n_splits=n_splits)
     ensemble: list[Pipeline] = []
     for fold_index, (train_idx, _) in enumerate(splitter.split(raw_training_df, groups=raw_training_df["group_id"]), start=1):
@@ -581,7 +581,7 @@ def evaluate_grouped_generalization(
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     # Diagnostic validation for the Fig. 4 model context; not a paper figure itself.
     unique_groups = groups.astype(str).nunique()
-    n_splits = min(n_splits, unique_groups)
+    n_splits = min(int(n_splits), choose_group_cv_splits(int(unique_groups)))
     splitter = GroupKFold(n_splits=n_splits)
     predictions: list[pd.DataFrame] = []
     fold_rows: list[dict[str, float | int | str]] = []
@@ -641,7 +641,7 @@ def evaluate_models_with_group_cv(
     unique_group_count = int(groups.nunique())
     if unique_group_count < 2:
         raise ValueError("Strict grouped CV requires at least 2 distinct groups.")
-    n_splits = min(unique_group_count, 10) if n_splits is None else min(unique_group_count, int(n_splits))
+    n_splits = choose_group_cv_splits(unique_group_count) if n_splits is None else min(unique_group_count, int(n_splits))
     splitter = GroupKFold(n_splits=n_splits)
 
     summary_rows: list[dict[str, object]] = []

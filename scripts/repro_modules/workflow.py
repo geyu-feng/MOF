@@ -46,14 +46,14 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
             mode="sequential",
             descriptor_preset="calibrated_mixed",
             mod_encoding="calibrated",
-            group_recipe="metal_family",
+            group_recipe="paper_43",
         ),
         SplitConfig(
             name="score_matched",
             mode="group_shuffle",
             descriptor_preset="calibrated_mixed",
             mod_encoding="calibrated",
-            group_recipe="metal_family",
+            group_recipe="paper_43",
             random_state=24,
         ),
     ]

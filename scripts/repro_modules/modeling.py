@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+from itertools import combinations
+
 from scripts.repro_modules.common import *
 
 # --- core.py ---
@@ -78,7 +81,12 @@ def build_preprocessor(feature_columns: Iterable[str]) -> ColumnTransformer:
         remainder="drop",
     )
 
-def build_group_cv_folds(raw_df: pd.DataFrame, n_splits: int = 10) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
+def choose_group_cv_splits(group_count: int) -> int:
+    """Use fewer grouped folds on small material-family datasets to stabilize CV."""
+    return max(2, min(5, group_count))
+
+
+def build_group_cv_folds(raw_df: pd.DataFrame, n_splits: int = 5) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
     validate_group_count(raw_df, "GroupKFold model selection", minimum=2)
     splitter = GroupKFold(n_splits=n_splits)
     folds: list[tuple[pd.DataFrame, pd.DataFrame]] = []
@@ -108,9 +116,103 @@ def recommend_test_group_count(n_groups: int) -> int:
         return 2
     return max(1, int(round(n_groups * 0.15)))
 
+
+def resolve_test_group_count(n_groups: int, config) -> int:
+    if config.mode == "sequential":
+        if config.train_group_count is not None:
+            return max(1, min(n_groups - 1, n_groups - int(config.train_group_count)))
+        return min(n_groups - 1, recommend_test_group_count(n_groups))
+    if config.mode == "group_shuffle":
+        if n_groups <= GROUP_AWARE_TUNING_GROUP_THRESHOLD:
+            return min(n_groups - 1, recommend_test_group_count(n_groups))
+        return max(1, min(n_groups - 1, int(math.ceil(n_groups * 0.1))))
+    raise ValueError(f"Unknown split mode: {config.mode}")
+
+
+def _iter_candidate_group_combinations(group_ids: list[int], test_group_count: int, seed: int) -> list[tuple[int, ...]]:
+    total = math.comb(len(group_ids), test_group_count)
+    if total <= 200000:
+        return [tuple(combo) for combo in combinations(group_ids, test_group_count)]
+    rng = np.random.default_rng(seed)
+    target_samples = min(10000, total)
+    seen: set[tuple[int, ...]] = set()
+    combos: list[tuple[int, ...]] = []
+    while len(combos) < target_samples:
+        combo = tuple(sorted(int(x) for x in rng.choice(group_ids, size=test_group_count, replace=False)))
+        if combo in seen:
+            continue
+        seen.add(combo)
+        combos.append(combo)
+    return combos
+
+
+def select_balanced_test_groups(raw_df: pd.DataFrame, test_group_count: int, random_state: int | None = None) -> set[int]:
+    """Pick a representative grouped holdout instead of relying on group-id order."""
+    group_ids = sorted(int(x) for x in raw_df["group_id"].drop_duplicates().tolist())
+    if test_group_count <= 0 or test_group_count >= len(group_ids):
+        raise ValueError(
+            f"Invalid test_group_count={test_group_count} for {len(group_ids)} groups."
+        )
+
+    rng = np.random.default_rng(42 if random_state is None else int(random_state))
+    candidate_combos = _iter_candidate_group_combinations(group_ids, test_group_count, 42 if random_state is None else int(random_state))
+
+    group_rows = raw_df.groupby("group_id").size().astype(float)
+    metal_counts = raw_df.groupby(["group_id", "metal"]).size().unstack(fill_value=0).astype(float)
+    total_rows = float(len(raw_df))
+    overall_q_mean = float(raw_df["q"].mean())
+    overall_q_std = float(raw_df["q"].std(ddof=0))
+    overall_q_std = overall_q_std if overall_q_std > 0 else 1.0
+    overall_metal_props = metal_counts.sum(axis=0) / total_rows
+    target_row_ratio = test_group_count / len(group_ids)
+    mean_group_rows = float(group_rows.mean()) if len(group_rows) else 1.0
+
+    best_combo: tuple[int, ...] | None = None
+    best_score: float | None = None
+
+    for combo in candidate_combos:
+        combo_ids = list(combo)
+        test_mask = raw_df["group_id"].isin(combo_ids)
+        test_rows = float(test_mask.sum())
+        if test_rows <= 0:
+            continue
+        row_ratio = test_rows / total_rows
+        row_loss = abs(row_ratio - target_row_ratio)
+
+        test_q = raw_df.loc[test_mask, "q"]
+        test_q_mean = float(test_q.mean())
+        test_q_std = float(test_q.std(ddof=0)) if len(test_q) > 1 else 0.0
+        q_mean_loss = abs(test_q_mean - overall_q_mean) / overall_q_std
+        q_std_loss = abs(test_q_std - overall_q_std) / overall_q_std
+
+        test_metal_props = metal_counts.loc[combo_ids].sum(axis=0) / test_rows
+        metal_loss = float((test_metal_props - overall_metal_props).abs().sum())
+
+        combo_rows = group_rows.loc[combo_ids]
+        singleton_penalty = float((combo_rows <= 1).mean())
+        size_balance_loss = abs(float(combo_rows.mean()) - mean_group_rows) / max(mean_group_rows, 1.0)
+
+        score = (
+            4.0 * row_loss
+            + 2.0 * metal_loss
+            + 1.5 * q_mean_loss
+            + 1.0 * q_std_loss
+            + 1.0 * singleton_penalty
+            + 0.5 * size_balance_loss
+        )
+        score += float(rng.uniform(0.0, 1e-9))
+
+        if best_score is None or score < best_score:
+            best_score = score
+            best_combo = combo
+
+    if best_combo is None:
+        raise RuntimeError("Unable to select a balanced grouped test split.")
+    return set(int(x) for x in best_combo)
+
 def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
     group_count = validate_group_count(raw_df, "Grouped model selection", minimum=2)
-    n_splits = min(10, group_count)
+    n_splits = choose_group_cv_splits(group_count)
     folds = build_group_cv_folds(raw_df, n_splits=n_splits)
     rows: list[dict[str, object]] = []
 
@@ -175,24 +277,11 @@ def make_split(df: pd.DataFrame, config) -> SplitBundle:
         raise ValueError(
             f"Split config '{config.name}' requires at least 2 distinct groups, got {len(unique_groups)}."
         )
-    recommended_test_groups = recommend_test_group_count(len(unique_groups))
-
-    if config.mode == "sequential":
-        default_train_group_count = len(unique_groups) - recommended_test_groups
-        train_group_count = config.train_group_count or default_train_group_count
-        train_group_count = min(max(1, train_group_count), max(1, len(unique_groups) - recommended_test_groups))
-        train_groups = set(unique_groups[:train_group_count])
-        train_idx = df.index[df["group_id"].isin(train_groups)].to_numpy()
-        test_idx = df.index[~df["group_id"].isin(train_groups)].to_numpy()
-        return SplitBundle(train_idx, test_idx, len(train_groups), df.loc[test_idx, "group_id"].nunique())
-
-    if config.mode == "group_shuffle":
-        test_size = recommended_test_groups if len(unique_groups) <= GROUP_AWARE_TUNING_GROUP_THRESHOLD else 0.1
-        splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=config.random_state)
-        train_idx, test_idx = next(splitter.split(df, groups=groups))
-        return SplitBundle(train_idx, test_idx, df.iloc[train_idx]["group_id"].nunique(), df.iloc[test_idx]["group_id"].nunique())
-
-    raise ValueError(f"Unknown split mode: {config.mode}")
+    test_group_count = resolve_test_group_count(len(unique_groups), config)
+    test_groups = select_balanced_test_groups(df, test_group_count, random_state=config.random_state)
+    train_idx = df.index[~df["group_id"].isin(test_groups)].to_numpy()
+    test_idx = df.index[df["group_id"].isin(test_groups)].to_numpy()
+    return SplitBundle(train_idx, test_idx, df.iloc[train_idx]["group_id"].nunique(), df.iloc[test_idx]["group_id"].nunique())
 
 def fit_models_for_split(
     df: pd.DataFrame,

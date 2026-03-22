@@ -474,11 +474,11 @@ def compute_learning_curve_neg_mae(
     model_name: str,
     model_params: dict[str, object],
     fractions: np.ndarray,
-    n_splits: int = 10,
+    n_splits: int = 5,
     random_state: int = 42,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     groups = raw_training_df["group_id"].astype(int)
-    n_splits = min(int(groups.nunique()), n_splits)
+    n_splits = min(int(groups.nunique()), choose_group_cv_splits(int(groups.nunique())), int(n_splits))
     splitter = GroupKFold(n_splits=n_splits)
     score_rows: list[list[float]] = [[] for _ in fractions]
 
