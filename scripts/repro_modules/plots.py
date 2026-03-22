@@ -177,9 +177,9 @@ def compute_feature_importance_table(pipe: Pipeline, training_df: pd.DataFrame, 
     raw_values: np.ndarray | None = None
     importance_source = "native"
 
-    if hasattr(model, "feature_importances_"):
+    if hasattr(model, "feature_importances_") and len(getattr(model, "feature_importances_")) == len(TRAINING_FEATURES):
         raw_values = np.asarray(getattr(model, "feature_importances_"), dtype=float)
-    elif hasattr(model, "coef_"):
+    elif hasattr(model, "coef_") and np.asarray(getattr(model, "coef_")).shape[-1] == len(TRAINING_FEATURES):
         coef = np.asarray(getattr(model, "coef_"), dtype=float)
         raw_values = np.mean(np.abs(coef), axis=0) if coef.ndim > 1 else np.abs(coef)
     else:
@@ -493,7 +493,7 @@ def compute_learning_curve_neg_mae(
             subset_train_raw = fold_train_raw_all.iloc[:subset_size].copy()
             subset_train = prepare_model_table(subset_train_raw, fit_df=subset_train_raw)
             fold_val = prepare_model_table(fold_val_raw, fit_df=subset_train_raw)
-            pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, model_params))])
+            pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, model_params))])
             pipe.fit(subset_train[TRAINING_FEATURES], subset_train["q"].to_numpy())
             pred = pipe.predict(fold_val[TRAINING_FEATURES])
             score_rows[frac_index].append(-mean_absolute_error(fold_val["q"].to_numpy(), pred))

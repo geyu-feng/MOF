@@ -72,9 +72,22 @@ def instantiate_model(model_name: str, params: dict[str, object] | None = None) 
 def build_models() -> dict[str, object]:
     return {model_name: instantiate_model(model_name) for model_name in MODEL_ORDER}
 
-def build_preprocessor(feature_columns: Iterable[str]) -> ColumnTransformer:
+def should_one_hot_mod_code(model_name: str) -> bool:
+    """Distance- and linear-style models should not see modification labels as ordered integers."""
+    return model_name in {"LR", "KNN", "SVR"}
+
+
+def build_preprocessor(feature_columns: Iterable[str], model_name: str) -> ColumnTransformer:
     feature_columns = list(feature_columns)
     scale_cols = [col for col in feature_columns if col != "mod_code"]
+    if should_one_hot_mod_code(model_name):
+        return ColumnTransformer(
+            transformers=[
+                ("scale", StandardScaler(), scale_cols),
+                ("mod", OneHotEncoder(handle_unknown="ignore", sparse_output=False), ["mod_code"]),
+            ],
+            remainder="drop",
+        )
     passthrough_cols = [col for col in feature_columns if col == "mod_code"]
     return ColumnTransformer(
         transformers=[("scale", StandardScaler(), scale_cols), ("pass", "passthrough", passthrough_cols)],
@@ -114,7 +127,7 @@ def recommend_test_group_count(n_groups: int) -> int:
         return 1
     if n_groups <= 12:
         return 2
-    return max(1, int(round(n_groups * 0.15)))
+    return max(2, int(math.ceil(n_groups * 0.10)))
 
 
 def resolve_test_group_count(n_groups: int, config) -> int:
@@ -159,6 +172,12 @@ def select_balanced_test_groups(raw_df: pd.DataFrame, test_group_count: int, ran
 
     group_rows = raw_df.groupby("group_id").size().astype(float)
     metal_counts = raw_df.groupby(["group_id", "metal"]).size().unstack(fill_value=0).astype(float)
+    feature_frame = raw_df[["group_id", *TRAINING_FEATURES]].copy()
+    feature_frame[TRAINING_FEATURES] = feature_frame[TRAINING_FEATURES].apply(pd.to_numeric, errors="coerce")
+    feature_frame[TRAINING_FEATURES] = feature_frame[TRAINING_FEATURES].fillna(feature_frame[TRAINING_FEATURES].median())
+    group_centroids = feature_frame.groupby("group_id")[TRAINING_FEATURES].mean().astype(float)
+    centroid_std = group_centroids.std(ddof=0).replace(0.0, 1.0)
+    group_centroids = (group_centroids - group_centroids.mean()) / centroid_std
     total_rows = float(len(raw_df))
     overall_q_mean = float(raw_df["q"].mean())
     overall_q_std = float(raw_df["q"].std(ddof=0))
@@ -192,6 +211,14 @@ def select_balanced_test_groups(raw_df: pd.DataFrame, test_group_count: int, ran
         singleton_penalty = float((combo_rows <= 1).mean())
         size_balance_loss = abs(float(combo_rows.mean()) - mean_group_rows) / max(mean_group_rows, 1.0)
 
+        test_centroids = group_centroids.loc[combo_ids].to_numpy(dtype=float)
+        train_centroids = group_centroids.drop(index=combo_ids).to_numpy(dtype=float)
+        if train_centroids.size == 0:
+            similarity_loss = 0.0
+        else:
+            distances = np.sqrt(((test_centroids[:, None, :] - train_centroids[None, :, :]) ** 2).sum(axis=2))
+            similarity_loss = float(np.mean(np.min(distances, axis=1)))
+
         score = (
             4.0 * row_loss
             + 2.0 * metal_loss
@@ -199,6 +226,7 @@ def select_balanced_test_groups(raw_df: pd.DataFrame, test_group_count: int, ran
             + 1.0 * q_std_loss
             + 1.0 * singleton_penalty
             + 0.5 * size_balance_loss
+            + 1.5 * similarity_loss
         )
         score += float(rng.uniform(0.0, 1e-9))
 
@@ -224,7 +252,7 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
             actual_chunks: list[np.ndarray] = []
             pred_chunks: list[np.ndarray] = []
             for fold_train, fold_val in folds:
-                pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, params))])
+                pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))])
                 pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
                 pred = pipe.predict(fold_val[TRAINING_FEATURES])
                 actual = fold_val["q"].to_numpy()
@@ -265,7 +293,7 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
     y = prepared_full_df["q"].to_numpy()
     for row in best_per_model.itertuples(index=False):
         params = json.loads(row.params_json)
-        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(row.model, params))])
+        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, row.model)), ("model", instantiate_model(row.model, params))])
         pipe.fit(prepared_full_df[TRAINING_FEATURES], y)
         fitted_best_models[row.model] = pipe
     return cv_results, best_per_model, fitted_best_models, prepared_full_df
@@ -301,7 +329,7 @@ def fit_models_for_split(
     fitted: dict[str, Pipeline] = {}
     for model_name in MODEL_ORDER:
         model = instantiate_model(model_name, None if tuned_params is None else tuned_params.get(model_name))
-        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES)), ("model", model)])
+        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", model)])
         pipe.fit(train_df[TRAINING_FEATURES], y_train)
         train_pred = pipe.predict(train_df[TRAINING_FEATURES])
         test_pred = pipe.predict(test_df[TRAINING_FEATURES])

@@ -146,7 +146,7 @@ def fit_named_models(prepared_training_df: pd.DataFrame, best_per_model: pd.Data
             continue
         row = best_per_model.loc[best_per_model["model"] == model_name].iloc[0]
         params = json.loads(row["params_json"])
-        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, params))])
+        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))])
         pipe.fit(prepared_training_df[TRAINING_FEATURES], y)
         fitted[model_name] = pipe
     return fitted
@@ -294,7 +294,7 @@ def fit_uncertainty_ensemble(raw_training_df: pd.DataFrame, model_name: str, mod
     if group_count < 2:
         fold_train = prepare_model_table(raw_training_df, fit_df=raw_training_df)
         pipe = Pipeline(
-            [("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, model_params))]
+            [("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, model_params))]
         )
         pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
         LOGGER.warning("Fig. 4 uncertainty ensemble fell back to a single full-data fit because only one group was available.")
@@ -306,7 +306,7 @@ def fit_uncertainty_ensemble(raw_training_df: pd.DataFrame, model_name: str, mod
         fold_train_raw = raw_training_df.iloc[train_idx].copy()
         fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
         pipe = Pipeline(
-            [("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, model_params))]
+            [("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, model_params))]
         )
         pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
         ensemble.append(pipe)
@@ -592,7 +592,7 @@ def evaluate_grouped_generalization(
         fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
         fold_test = prepare_model_table(fold_test_raw, fit_df=fold_train_raw)
         pipe = Pipeline(
-            [("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, model_params))]
+            [("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, model_params))]
         )
         pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
         pred = pipe.predict(fold_test[TRAINING_FEATURES])
@@ -656,7 +656,7 @@ def evaluate_models_with_group_cv(
             fold_test_raw = raw_training_df.iloc[test_idx].copy()
             fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
             fold_test = prepare_model_table(fold_test_raw, fit_df=fold_train_raw)
-            pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES)), ("model", instantiate_model(model_name, params))])
+            pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))])
             pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
             pred = pipe.predict(fold_test[TRAINING_FEATURES])
             actual = fold_test["q"].to_numpy()
