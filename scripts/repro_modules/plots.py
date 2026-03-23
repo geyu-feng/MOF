@@ -508,11 +508,37 @@ def compute_learning_curve_neg_mae(
     std_scores = np.asarray([float(np.std(scores)) for scores in score_rows], dtype=float)
     return train_sizes, mean_scores, std_scores
 
+
+def build_figs4_cache_tag(
+    raw_training_df: pd.DataFrame,
+    model_name: str,
+    model_params: dict[str, object],
+    fractions: np.ndarray,
+) -> str:
+    normalized = raw_training_df.fillna("<NA>").astype(str)
+    row_hash = pd.util.hash_pandas_object(normalized, index=True).to_numpy()
+    payload = {
+        "model": model_name,
+        "params": model_params,
+        "fractions": [float(x) for x in fractions],
+        "training_fingerprint": hashlib.sha1(row_hash.tobytes()).hexdigest(),
+    }
+    return hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+
 def save_figS4_learning_curve(raw_training_df: pd.DataFrame, model_name: str, model_params: dict[str, object], filename: str) -> None:
     # Supplementary Fig. S4: learning curve of the current display/best model.
     set_paper_rcparams()
     fractions = np.arange(0.2, 1.0, 0.1)
-    train_sizes, cv_scores, cv_stds = compute_learning_curve_neg_mae(raw_training_df, model_name, model_params, fractions)
+    cache_tag = build_figs4_cache_tag(raw_training_df, model_name, model_params, fractions)
+    cache_path = OUTPUT_DIR / f"figS4_learning_curve_cache_{cache_tag}.csv"
+    if cache_path.exists():
+        cache_df = pd.read_csv(cache_path)
+        train_sizes = cache_df["train_size"].to_numpy(dtype=float)
+        cv_scores = cache_df["score"].to_numpy(dtype=float)
+        cv_stds = cache_df["std"].to_numpy(dtype=float)
+    else:
+        train_sizes, cv_scores, cv_stds = compute_learning_curve_neg_mae(raw_training_df, model_name, model_params, fractions)
+        pd.DataFrame({"train_size": train_sizes, "score": cv_scores, "std": cv_stds}).to_csv(cache_path, index=False)
     x_values = train_sizes / len(raw_training_df) * 100.0
 
     fig, ax = plt.subplots(figsize=(4.6, 3.3))

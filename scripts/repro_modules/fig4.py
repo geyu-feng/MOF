@@ -639,6 +639,7 @@ def evaluate_models_with_group_cv(
     raw_training_df: pd.DataFrame,
     tuned_params: dict[str, dict[str, object]],
     n_splits: int | None = None,
+    model_names: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     # Row-wise CV diagnostics aligned with the main modeling workflow.
     row_count = int(len(raw_training_df))
@@ -648,12 +649,13 @@ def evaluate_models_with_group_cv(
     unique_group_count = int(groups.nunique())
     n_splits = choose_row_cv_splits(row_count) if n_splits is None else min(row_count, int(n_splits))
     splitter = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    active_models = MODEL_ORDER if model_names is None else [name for name in model_names if name in MODEL_ORDER]
 
     summary_rows: list[dict[str, object]] = []
     fold_rows: list[dict[str, object]] = []
     group_rows: list[dict[str, object]] = []
 
-    for model_name in MODEL_ORDER:
+    for model_name in active_models:
         params = tuned_params.get(model_name, {})
         prediction_chunks: list[pd.DataFrame] = []
         for fold_index, (train_idx, test_idx) in enumerate(splitter.split(raw_training_df), start=1):
@@ -988,15 +990,28 @@ def render_fig4_artifacts(
         )
     else:
         context = create_model_context(config)
+    canonical_stem = config["output"]["canonical_stem"]
+    output_tag = context.output_tag
+    cache_paths = bundle_output_paths(output_dir, canonical_stem, output_tag)
+    canonical_paths = [output_dir / f"{canonical_stem}.png"]
+    if config["output"]["write_pdf"]:
+        canonical_paths.append(output_dir / f"{canonical_stem}.pdf")
+    if config["output"]["write_svg"]:
+        canonical_paths.append(output_dir / f"{canonical_stem}.svg")
+
+    if bundle_outputs_exist(output_dir, canonical_stem, output_tag) and all(path.exists() for path in canonical_paths):
+        LOGGER.info("Reused cached Fig. 4 bundle and canonical outputs for %s.", output_tag)
+        return context
+
+    if bundle_outputs_exist(output_dir, canonical_stem, output_tag):
+        LOGGER.info("Reused cached Fig. 4 bundle tables for %s and regenerated canonical outputs.", output_tag)
+        best_bundle = load_saved_bundle(output_dir, canonical_stem, output_tag, context.best_model_name, context.best_model_params)
+        for destination in canonical_paths:
+            plot_fig4(best_bundle, config, destination)
+        return context
+
     cleanup_fig4_outputs(output_dir)
     best_bundle = build_fig4_bundle(config, context, context.best_model_name)
-    formats = [".png"]
-    if config["output"]["write_pdf"]:
-        formats.append(".pdf")
-    if config["output"]["write_svg"]:
-        formats.append(".svg")
-    for suffix in formats:
-        destination = output_dir / f"{config['output']['canonical_stem']}{suffix}"
-        plot_fig4(best_bundle, config, destination)
+    save_bundle_outputs(best_bundle, context, config, output_dir, canonical_stem, output_tag)
     return context
 

@@ -71,10 +71,12 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
     )
     cv_results_df, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
+    best_model_name = str(cv_best_df.iloc[0]["model"])
     if not fig3_only:
         strict_group_cv_summary, strict_group_cv_folds, strict_group_cv_groups = evaluate_models_with_group_cv(
             display_training_raw,
             tuned_params,
+            model_names=[best_model_name],
         )
         strict_group_cv_summary.to_csv(OUTPUT_DIR / "strict_group_cv_summary.csv", index=False)
         strict_group_cv_folds.to_csv(OUTPUT_DIR / "strict_group_cv_fold_metrics.csv", index=False)
@@ -101,7 +103,6 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
     target_core_df = build_target_core_feature_table(target_core_raw, "calibrated_mixed", display_training_df, "calibrated")
     target_core_df.to_csv(OUTPUT_DIR / "core_target_feature_table_5382.csv", index=False)
 
-    best_model_name = cv_best_df.iloc[0]["model"]
     second_model_name = cv_best_df.iloc[1]["model"]
     screening_mod_weights = get_screening_mod_weights(display_training_df)
     first_adsorption_df = make_first_adsorption_dataset(
