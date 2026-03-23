@@ -51,6 +51,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PRIMARY_DATA_XLSX = ROOT / "11.xlsx"
 
 OUTPUT_DIR = ROOT / "outputs"
+DEFAULT_SPLIT_SEED = 10
 
 RAW_COLUMN_MAP = {
     "Coordination metal": "metal",

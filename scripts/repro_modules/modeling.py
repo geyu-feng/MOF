@@ -4,40 +4,57 @@ import math
 from itertools import combinations
 
 from scripts.repro_modules.common import *
+from sklearn.model_selection import train_test_split
 
 # --- core.py ---
 
-def get_model_param_grids() -> dict[str, dict[str, list[object]]]:
+def get_fixed_model_params() -> dict[str, dict[str, object]]:
     return {
-        "RF": {"n_estimators": [100, 200], "max_depth": [4, 6, 8], "min_samples_leaf": [3, 5, 8]},
+        "RF": {"n_estimators": 150, "max_depth": 8, "min_samples_leaf": 10},
         "GBDT": {
-            "n_estimators": [80, 120, 160],
-            "max_depth": [2, 3],
-            "min_samples_leaf": [1, 2, 4],
-            "learning_rate": [0.03, 0.05, 0.1],
+            "n_estimators": 120,
+            "max_depth": 5,
+            "min_samples_leaf": 3,
+            "learning_rate": 0.1,
+            "loss": "squared_error",
         },
         "XGB": {
-            "n_estimators": [100, 160, 220],
-            "max_depth": [2, 4, 6],
-            "min_child_weight": [3, 5, 8],
-            "gamma": [0.0, 0.1, 0.3],
-            "learning_rate": [0.03, 0.05, 0.1],
-            "subsample": [0.7, 0.85],
-            "colsample_bytree": [0.7, 0.9],
+            "n_estimators": 250,
+            "max_depth": 15,
+            "min_child_weight": 7,
+            "gamma": 0.1,
+            "subsample": 0.8,
+            "colsample_bytree": 0.9,
+            "learning_rate": 0.01,
         },
-        "LR": {"fit_intercept": [True, False]},
-        "KNN": {"n_neighbors": [3, 5, 7, 9, 11, 15], "weights": ["uniform", "distance"]},
-        "SVR": {"C": [1.0, 5.0, 10.0, 50.0, 100.0], "epsilon": [0.1, 0.5, 1.0, 5.0], "gamma": ["scale", 0.01, 0.05, 0.1]},
+        "LR": {"fit_intercept": True},
+        "KNN": {"n_neighbors": 5, "weights": "distance"},
+        "SVR": {"kernel": "rbf", "C": 10.0, "epsilon": 1.0, "gamma": "scale"},
+    }
+
+
+def get_model_param_grids() -> dict[str, dict[str, list[object]]]:
+    fixed_params = get_fixed_model_params()
+    return {
+        model_name: {param_name: [param_value] for param_name, param_value in model_params.items()}
+        for model_name, model_params in fixed_params.items()
     }
 
 def instantiate_model(model_name: str, params: dict[str, object] | None = None) -> object:
     params = {} if params is None else params.copy()
     if model_name == "RF":
-        base = {"n_estimators": 200, "random_state": 42, "n_jobs": -1, "min_samples_leaf": 2}
+        base = {"n_estimators": 150, "max_depth": 8, "min_samples_leaf": 10, "random_state": 42, "n_jobs": -1}
         base.update(params)
         return RandomForestRegressor(**base)
     if model_name == "GBDT":
-        base = {"random_state": 42}
+        base = {
+            "n_estimators": 120,
+            "max_depth": 5,
+            "min_samples_leaf": 3,
+            "learning_rate": 0.1,
+            "loss": "squared_error",
+            "random_state": 42,
+        }
         base.update(params)
         return GradientBoostingRegressor(**base)
     if model_name == "XGB":
@@ -45,10 +62,10 @@ def instantiate_model(model_name: str, params: dict[str, object] | None = None) 
             "n_estimators": 250,
             "learning_rate": 0.01,
             "max_depth": 15,
+            "min_child_weight": 7,
+            "gamma": 0.1,
             "subsample": 0.8,
             "colsample_bytree": 0.9,
-            "gamma": 0.0,
-            "min_child_weight": 5,
             "objective": "reg:squarederror",
             "random_state": 42,
             "n_jobs": 8,
@@ -72,25 +89,15 @@ def instantiate_model(model_name: str, params: dict[str, object] | None = None) 
 def build_models() -> dict[str, object]:
     return {model_name: instantiate_model(model_name) for model_name in MODEL_ORDER}
 
-def should_one_hot_mod_code(model_name: str) -> bool:
-    """Distance- and linear-style models should not see modification labels as ordered integers."""
-    return model_name in {"LR", "KNN", "SVR"}
-
-
 def build_preprocessor(feature_columns: Iterable[str], model_name: str) -> ColumnTransformer:
     feature_columns = list(feature_columns)
-    scale_cols = [col for col in feature_columns if col != "mod_code"]
-    if should_one_hot_mod_code(model_name):
+    if model_name in {"LR", "KNN", "SVR"}:
         return ColumnTransformer(
-            transformers=[
-                ("scale", StandardScaler(), scale_cols),
-                ("mod", OneHotEncoder(handle_unknown="ignore", sparse_output=False), ["mod_code"]),
-            ],
+            transformers=[("scale", StandardScaler(), feature_columns)],
             remainder="drop",
         )
-    passthrough_cols = [col for col in feature_columns if col == "mod_code"]
     return ColumnTransformer(
-        transformers=[("scale", StandardScaler(), scale_cols), ("pass", "passthrough", passthrough_cols)],
+        transformers=[("pass", "passthrough", feature_columns)],
         remainder="drop",
     )
 
@@ -239,45 +246,40 @@ def select_balanced_test_groups(raw_df: pd.DataFrame, test_group_count: int, ran
     return set(int(x) for x in best_combo)
 
 def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
-    group_count = validate_group_count(raw_df, "Grouped model selection", minimum=2)
-    n_splits = choose_group_cv_splits(group_count)
-    folds = build_group_cv_folds(raw_df, n_splits=n_splits)
+    prepared_full_df = prepare_model_table(raw_df, fit_df=raw_df)
+    train_idx, test_idx = train_test_split(
+        np.arange(len(prepared_full_df)),
+        test_size=0.1,
+        random_state=DEFAULT_SPLIT_SEED,
+        shuffle=True,
+    )
+    train_df = prepared_full_df.iloc[train_idx].copy()
+    test_df = prepared_full_df.iloc[test_idx].copy()
     rows: list[dict[str, object]] = []
 
     for model_name in MODEL_ORDER:
         for params in ParameterGrid(get_model_param_grids()[model_name]):
-            fold_r2: list[float] = []
-            fold_mae: list[float] = []
-            fold_rmse: list[float] = []
-            actual_chunks: list[np.ndarray] = []
-            pred_chunks: list[np.ndarray] = []
-            for fold_train, fold_val in folds:
-                pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))])
-                pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
-                pred = pipe.predict(fold_val[TRAINING_FEATURES])
-                actual = fold_val["q"].to_numpy()
-                fold_r2.append(r2_score(actual, pred))
-                fold_mae.append(mean_absolute_error(actual, pred))
-                fold_rmse.append(mean_squared_error(actual, pred) ** 0.5)
-                actual_chunks.append(actual)
-                pred_chunks.append(pred)
-
-            actual_all = np.concatenate(actual_chunks)
-            pred_all = np.concatenate(pred_chunks)
+            pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))])
+            pipe.fit(train_df[TRAINING_FEATURES], train_df["q"].to_numpy())
+            pred_all = pipe.predict(test_df[TRAINING_FEATURES])
+            actual_all = test_df["q"].to_numpy()
+            holdout_r2 = float(r2_score(actual_all, pred_all))
+            holdout_mae = float(mean_absolute_error(actual_all, pred_all))
+            holdout_rmse = float(mean_squared_error(actual_all, pred_all) ** 0.5)
 
             rows.append(
                 {
                     "model": model_name,
                     "params_json": json.dumps(params, sort_keys=True),
-                    "mean_r2": float(np.mean(fold_r2)),
-                    "std_r2": float(np.std(fold_r2)),
-                    "mean_mae": float(np.mean(fold_mae)),
-                    "mean_rmse": float(np.mean(fold_rmse)),
-                    "oof_r2": float(r2_score(actual_all, pred_all)),
-                    "oof_mae": float(mean_absolute_error(actual_all, pred_all)),
-                    "oof_rmse": float(mean_squared_error(actual_all, pred_all) ** 0.5),
-                    "cv_strategy": "group_kfold",
-                    "cv_folds": int(n_splits),
+                    "mean_r2": holdout_r2,
+                    "std_r2": 0.0,
+                    "mean_mae": holdout_mae,
+                    "mean_rmse": holdout_rmse,
+                    "oof_r2": holdout_r2,
+                    "oof_mae": holdout_mae,
+                    "oof_rmse": holdout_rmse,
+                    "cv_strategy": "fixed_holdout",
+                    "cv_folds": 1,
                 }
             )
 
@@ -287,8 +289,6 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
     )
     cv_results.to_csv(output_dir / "model_grid_search_cv.csv", index=False)
     best_per_model.to_csv(output_dir / "model_grid_search_best_per_model.csv", index=False)
-
-    prepared_full_df = prepare_model_table(raw_df, fit_df=raw_df)
     fitted_best_models: dict[str, Pipeline] = {}
     y = prepared_full_df["q"].to_numpy()
     for row in best_per_model.itertuples(index=False):
@@ -299,16 +299,13 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
     return cv_results, best_per_model, fitted_best_models, prepared_full_df
 
 def make_split(df: pd.DataFrame, config) -> SplitBundle:
-    groups = pd.Series(df["group_id"])
-    unique_groups = pd.Index(groups.drop_duplicates())
-    if len(unique_groups) < 2:
-        raise ValueError(
-            f"Split config '{config.name}' requires at least 2 distinct groups, got {len(unique_groups)}."
-        )
-    test_group_count = resolve_test_group_count(len(unique_groups), config)
-    test_groups = select_balanced_test_groups(df, test_group_count, random_state=config.random_state)
-    train_idx = df.index[~df["group_id"].isin(test_groups)].to_numpy()
-    test_idx = df.index[df["group_id"].isin(test_groups)].to_numpy()
+    random_state = DEFAULT_SPLIT_SEED if config.random_state is None else int(config.random_state)
+    train_idx, test_idx = train_test_split(
+        df.index.to_numpy(),
+        test_size=0.1,
+        random_state=random_state,
+        shuffle=True,
+    )
     return SplitBundle(train_idx, test_idx, df.iloc[train_idx]["group_id"].nunique(), df.iloc[test_idx]["group_id"].nunique())
 
 def fit_models_for_split(
