@@ -525,12 +525,26 @@ def build_figs4_cache_tag(
     }
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
+
+def build_figs4_cache_path(
+    raw_training_df: pd.DataFrame,
+    model_name: str,
+    model_params: dict[str, object],
+    fractions: np.ndarray,
+) -> Path:
+    """Store S4 learning-curve cache as an internal file, not a visible output artifact."""
+    cache_tag = build_figs4_cache_tag(raw_training_df, model_name, model_params, fractions)
+    return OUTPUT_DIR / f"_figS4_cache_{cache_tag}.csv"
+
 def save_figS4_learning_curve(raw_training_df: pd.DataFrame, model_name: str, model_params: dict[str, object], filename: str) -> None:
     # Supplementary Fig. S4: learning curve of the current display/best model.
     set_paper_rcparams()
     fractions = np.arange(0.2, 1.0, 0.1)
     cache_tag = build_figs4_cache_tag(raw_training_df, model_name, model_params, fractions)
-    cache_path = OUTPUT_DIR / f"figS4_learning_curve_cache_{cache_tag}.csv"
+    cache_path = build_figs4_cache_path(raw_training_df, model_name, model_params, fractions)
+    legacy_cache_path = OUTPUT_DIR / f"figS4_learning_curve_cache_{cache_tag}.csv"
+    if not cache_path.exists() and legacy_cache_path.exists():
+        legacy_cache_path.replace(cache_path)
     if cache_path.exists():
         cache_df = pd.read_csv(cache_path)
         train_sizes = cache_df["train_size"].to_numpy(dtype=float)
