@@ -112,7 +112,7 @@ def build_model_selection_signature(config: dict[str, Any]) -> str:
     return hashlib.sha1(stable_json(payload).encode("utf-8")).hexdigest()
 
 def model_selection_cache_meta_path(output_dir: Path) -> Path:
-    return output_dir / "fig4_model_selection_cache.json"
+    return output_dir / "_fig4_model_selection_cache.json"
 
 def write_model_selection_cache_meta(output_dir: Path, config: dict[str, Any], raw_training_df: pd.DataFrame) -> None:
     meta = {
@@ -219,18 +219,19 @@ def versioned_stem(stem: str, output_tag: str) -> str:
     return f"{stem}_{output_tag}"
 
 def bundle_output_paths(output_dir: Path, stem: str, output_tag: str) -> dict[str, Path]:
-    versioned = versioned_stem(stem, output_tag)
+    cache_stem = f"_fig4_cache_{output_tag}"
     return {
-        "png": output_dir / f"{versioned}.png",
-        "pdf": output_dir / f"{versioned}.pdf",
-        "svg": output_dir / f"{versioned}.svg",
-        "curve_1d": output_dir / f"{versioned}_1d_curves.csv",
-        "surface_2d": output_dir / f"{versioned}_2d_surface.csv",
+        "png": output_dir / f"{cache_stem}.png",
+        "pdf": output_dir / f"{cache_stem}.pdf",
+        "svg": output_dir / f"{cache_stem}.svg",
+        "curve_1d": output_dir / f"{cache_stem}_1d_curves.csv",
+        "surface_2d": output_dir / f"{cache_stem}_2d_surface.csv",
     }
 
 def bundle_outputs_exist(output_dir: Path, stem: str, output_tag: str) -> bool:
     paths = bundle_output_paths(output_dir, stem, output_tag)
-    return all(path.exists() for path in paths.values())
+    required = ["png", "curve_1d", "surface_2d"]
+    return all(paths[key].exists() for key in required)
 
 def load_saved_bundle(output_dir: Path, stem: str, output_tag: str, model_name: str, model_params: dict[str, Any]) -> Fig4DataBundle:
     paths = bundle_output_paths(output_dir, stem, output_tag)
@@ -498,7 +499,18 @@ def build_contour_levels(surface: np.ndarray, n_levels: int) -> np.ndarray:
 
 def plot_two_d_panel(ax: plt.Axes, panel: TwoDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
     xx, yy = np.meshgrid(panel.x_grid, panel.y_grid)
-    ax.pcolormesh(xx, yy, panel.z, cmap=plot_cfg["colormap"], shading="nearest")
+    fill_levels = build_contour_levels(panel.z, plot_cfg["contourf_levels"])
+    line_levels = build_contour_levels(panel.z, plot_cfg["contour_levels"])
+    ax.contourf(xx, yy, panel.z, levels=fill_levels, cmap=plot_cfg["colormap"], antialiased=False)
+    ax.contour(
+        xx,
+        yy,
+        panel.z,
+        levels=line_levels,
+        colors=plot_cfg["contour_line_color"],
+        linewidths=plot_cfg["contour_line_width"],
+        linestyles="solid",
+    )
     ax.set_xlim(float(np.min(panel.x_grid)), float(np.max(panel.x_grid)))
     ax.set_ylim(float(np.min(panel.y_grid)), float(np.max(panel.y_grid)))
     ax.set_xlabel(panel_cfg["xlabel"])
@@ -516,7 +528,6 @@ def infer_y_limits(curve: np.ndarray, panel_cfg: dict[str, Any]) -> tuple[float,
 
 def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
     ax.step(panel.x, panel.y, where="mid", color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
-    ax.plot(panel.x, panel.y, linestyle="none", marker="o", markersize=2.4, color=plot_cfg["line_color"], zorder=2.2)
     ax.set_xlim(float(np.min(panel.x)), float(np.max(panel.x)))
     ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
     ax.set_xlabel(panel_cfg["xlabel"])
@@ -851,8 +862,8 @@ def save_canonical_and_versioned(destination: Path, canonical_stem: str, output_
             shutil.copyfile(destination, versioned_path)
 
 def cleanup_fig4_outputs(output_dir: Path) -> None:
-    # Keep only the canonical fig4_best.* outputs in the output directory.
-    keep = {"fig4_best.png", "fig4_best.pdf", "fig4_best.svg"}
+    # Keep only the canonical Fig. 4 PNG output and hidden cache artifacts.
+    keep = {"fig4_best.png"}
     for path in output_dir.glob("fig4*"):
         if path.name in keep:
             continue
@@ -860,6 +871,9 @@ def cleanup_fig4_outputs(output_dir: Path) -> None:
             shutil.rmtree(path)
         else:
             path.unlink()
+    for path in output_dir.glob("_fig4_cache_*"):
+        # Internal caches are kept.
+        continue
 
 def save_bundle_outputs(
     bundle: Fig4DataBundle,
@@ -876,12 +890,12 @@ def save_bundle_outputs(
     if output_cfg["write_svg"]:
         formats.append(".svg")
 
-    versioned = versioned_stem(stem, output_tag)
+    cache_paths = bundle_output_paths(output_dir, stem, output_tag)
     for suffix in formats:
-        destination = output_dir / f"{versioned}{suffix}"
+        destination = cache_paths["png"] if suffix == ".png" else cache_paths["pdf"] if suffix == ".pdf" else cache_paths["svg"]
         plot_fig4(bundle, config, destination)
         save_canonical_and_versioned(destination, stem, output_dir, output_tag, bool(output_cfg["write_versioned_copy"]))
-    write_bundle_tables(bundle, output_dir, versioned)
+    write_bundle_tables(bundle, output_dir, cache_paths["curve_1d"].stem.removesuffix("_1d_curves"))
 
 def build_diagnostic_notes() -> list[str]:
     return [
