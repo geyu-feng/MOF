@@ -477,19 +477,24 @@ def compute_learning_curve_neg_mae(
     n_splits: int = 5,
     random_state: int = 42,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    groups = raw_training_df["group_id"].astype(int)
-    n_splits = min(int(groups.nunique()), choose_group_cv_splits(int(groups.nunique())), int(n_splits))
-    splitter = GroupKFold(n_splits=n_splits)
+    row_count = int(len(raw_training_df))
+    if row_count < 2:
+        raise ValueError("Learning curve requires at least 2 rows.")
+    n_splits = min(choose_row_cv_splits(row_count), int(n_splits), row_count)
+    splitter = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
     score_rows: list[list[float]] = [[] for _ in fractions]
 
-    for fold_index, (train_idx, val_idx) in enumerate(splitter.split(raw_training_df, groups=groups), start=1):
+    min_subset_rows = max(int(get_fixed_model_params().get("KNN", {}).get("n_neighbors", 5)), 2)
+
+    for fold_index, (train_idx, val_idx) in enumerate(splitter.split(raw_training_df), start=1):
         fold_train_raw_all = raw_training_df.iloc[train_idx].copy().reset_index(drop=True)
         fold_val_raw = raw_training_df.iloc[val_idx].copy()
         subset_order = np.random.RandomState(random_state + fold_index * 97).permutation(len(fold_train_raw_all))
         fold_train_raw_all = fold_train_raw_all.iloc[subset_order].reset_index(drop=True)
 
         for frac_index, frac in enumerate(fractions):
-            subset_size = max(8, int(np.floor(len(fold_train_raw_all) * float(frac))))
+            subset_size = max(min_subset_rows, int(np.floor(len(fold_train_raw_all) * float(frac))))
+            subset_size = min(len(fold_train_raw_all), subset_size)
             subset_train_raw = fold_train_raw_all.iloc[:subset_size].copy()
             subset_train = prepare_model_table(subset_train_raw, fit_df=subset_train_raw)
             fold_val = prepare_model_table(fold_val_raw, fit_df=subset_train_raw)

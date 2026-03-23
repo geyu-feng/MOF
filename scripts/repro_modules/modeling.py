@@ -106,17 +106,21 @@ def choose_group_cv_splits(group_count: int) -> int:
     return max(2, min(5, group_count))
 
 
-def build_group_cv_folds(raw_df: pd.DataFrame, n_splits: int = 5) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
-    validate_group_count(raw_df, "GroupKFold model selection", minimum=2)
-    splitter = GroupKFold(n_splits=n_splits)
-    folds: list[tuple[pd.DataFrame, pd.DataFrame]] = []
-    for train_idx, val_idx in splitter.split(raw_df, groups=raw_df["group_id"]):
-        fold_train_raw = raw_df.iloc[train_idx].copy()
-        fold_val_raw = raw_df.iloc[val_idx].copy()
-        fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
-        fold_val = prepare_model_table(fold_val_raw, fit_df=fold_train_raw)
-        folds.append((fold_train, fold_val))
-    return folds
+def choose_row_cv_splits(row_count: int) -> int:
+    """Use a modest KFold count for row-wise validation on local tabular datasets."""
+    return max(2, min(5, int(row_count)))
+
+
+def validate_holdout_train_size(frame: pd.DataFrame, context: str, test_size: float = 0.1) -> int:
+    row_count = int(len(frame))
+    min_train_rows = max(int(get_fixed_model_params()["KNN"]["n_neighbors"]), 2)
+    if row_count < min_train_rows + 1:
+        raise ValueError(
+            f"{context} requires at least {min_train_rows + 1} rows for a {int(test_size * 100)}% holdout, "
+            f"got {row_count}."
+        )
+    return row_count
+
 
 def build_kfold_prepared_folds(raw_df: pd.DataFrame, n_splits: int = 10) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
     splitter = KFold(n_splits=n_splits, shuffle=True, random_state=42)
@@ -247,6 +251,7 @@ def select_balanced_test_groups(raw_df: pd.DataFrame, test_group_count: int, ran
 
 def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
     prepared_full_df = prepare_model_table(raw_df, fit_df=raw_df)
+    validate_holdout_train_size(prepared_full_df, "Model selection")
     train_idx, test_idx = train_test_split(
         np.arange(len(prepared_full_df)),
         test_size=0.1,
@@ -299,6 +304,7 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
     return cv_results, best_per_model, fitted_best_models, prepared_full_df
 
 def make_split(df: pd.DataFrame, config) -> SplitBundle:
+    validate_holdout_train_size(df, f"{config.name} split")
     random_state = DEFAULT_SPLIT_SEED if config.random_state is None else int(config.random_state)
     train_idx, test_idx = train_test_split(
         df.index.to_numpy(),

@@ -19,7 +19,7 @@ class ReproModuleTests(unittest.TestCase):
         self.assertIn("Unknown", mapping)
         self.assertEqual(sorted(unknown), ["Experimental", "Unknown"])
 
-    def test_grouped_cv_requires_at_least_two_groups(self) -> None:
+    def test_holdout_requires_enough_rows(self) -> None:
         frame = pd.DataFrame(
             {
                 "group_id": [0, 0],
@@ -41,7 +41,7 @@ class ReproModuleTests(unittest.TestCase):
             }
         )
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "at least 2 distinct groups"):
+            with self.assertRaisesRegex(ValueError, "requires at least 6 rows"):
                 _run_model_grid_search_cv(frame, Path(temp_dir))
 
 

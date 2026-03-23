@@ -290,19 +290,19 @@ def compute_partial_dependence_2d(
     return surface
 
 def fit_uncertainty_ensemble(raw_training_df: pd.DataFrame, model_name: str, model_params: dict[str, Any], n_splits: int) -> list[Pipeline]:
-    group_count = int(raw_training_df["group_id"].nunique())
-    if group_count < 2:
+    row_count = int(len(raw_training_df))
+    if row_count < 2:
         fold_train = prepare_model_table(raw_training_df, fit_df=raw_training_df)
         pipe = Pipeline(
             [("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, model_params))]
         )
         pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
-        LOGGER.warning("Fig. 4 uncertainty ensemble fell back to a single full-data fit because only one group was available.")
+        LOGGER.warning("Fig. 4 uncertainty ensemble fell back to a single full-data fit because only one row-split was available.")
         return [pipe]
-    n_splits = min(int(n_splits), choose_group_cv_splits(group_count))
-    splitter = GroupKFold(n_splits=n_splits)
+    n_splits = min(int(n_splits), choose_row_cv_splits(row_count))
+    splitter = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     ensemble: list[Pipeline] = []
-    for fold_index, (train_idx, _) in enumerate(splitter.split(raw_training_df, groups=raw_training_df["group_id"]), start=1):
+    for fold_index, (train_idx, _) in enumerate(splitter.split(raw_training_df), start=1):
         fold_train_raw = raw_training_df.iloc[train_idx].copy()
         fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
         pipe = Pipeline(
@@ -579,14 +579,18 @@ def evaluate_grouped_generalization(
     n_splits: int,
     label: str,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
-    # Diagnostic validation for the Fig. 4 model context; not a paper figure itself.
+    # Diagnostic validation for the Fig. 4 model context using the same row-wise CV
+    # family as the main modeling workflow.
+    row_count = int(len(raw_training_df))
+    if row_count < 2:
+        raise ValueError("Row-wise diagnostic validation requires at least 2 rows.")
     unique_groups = groups.astype(str).nunique()
-    n_splits = min(int(n_splits), choose_group_cv_splits(int(unique_groups)))
-    splitter = GroupKFold(n_splits=n_splits)
+    n_splits = min(int(n_splits), choose_row_cv_splits(row_count), row_count)
+    splitter = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     predictions: list[pd.DataFrame] = []
     fold_rows: list[dict[str, float | int | str]] = []
 
-    for fold_index, (train_idx, test_idx) in enumerate(splitter.split(raw_training_df, groups=groups.astype(str)), start=1):
+    for fold_index, (train_idx, test_idx) in enumerate(splitter.split(raw_training_df), start=1):
         fold_train_raw = raw_training_df.iloc[train_idx].copy()
         fold_test_raw = raw_training_df.iloc[test_idx].copy()
         fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
@@ -636,13 +640,14 @@ def evaluate_models_with_group_cv(
     tuned_params: dict[str, dict[str, object]],
     n_splits: int | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    # Strict grouped CV diagnostics used by reports and debugging around Fig. 4/modeling.
+    # Row-wise CV diagnostics aligned with the main modeling workflow.
+    row_count = int(len(raw_training_df))
+    if row_count < 2:
+        raise ValueError("Strict CV diagnostics require at least 2 rows.")
     groups = raw_training_df["group_id"].astype(int)
     unique_group_count = int(groups.nunique())
-    if unique_group_count < 2:
-        raise ValueError("Strict grouped CV requires at least 2 distinct groups.")
-    n_splits = choose_group_cv_splits(unique_group_count) if n_splits is None else min(unique_group_count, int(n_splits))
-    splitter = GroupKFold(n_splits=n_splits)
+    n_splits = choose_row_cv_splits(row_count) if n_splits is None else min(row_count, int(n_splits))
+    splitter = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
     summary_rows: list[dict[str, object]] = []
     fold_rows: list[dict[str, object]] = []
@@ -651,7 +656,7 @@ def evaluate_models_with_group_cv(
     for model_name in MODEL_ORDER:
         params = tuned_params.get(model_name, {})
         prediction_chunks: list[pd.DataFrame] = []
-        for fold_index, (train_idx, test_idx) in enumerate(splitter.split(raw_training_df, groups=groups), start=1):
+        for fold_index, (train_idx, test_idx) in enumerate(splitter.split(raw_training_df), start=1):
             fold_train_raw = raw_training_df.iloc[train_idx].copy()
             fold_test_raw = raw_training_df.iloc[test_idx].copy()
             fold_train = prepare_model_table(fold_train_raw, fit_df=fold_train_raw)
@@ -726,7 +731,8 @@ def write_group_cv_report(
     summary_df: pd.DataFrame,
     group_df: pd.DataFrame,
 ) -> None:
-    # Write strict grouped-CV markdown summary for local review.
+    # Write row-wise CV markdown summary for local review while keeping the
+    # legacy output filename stable.
     group_overview = (
         raw_training_df.groupby("group_id", as_index=False)
         .agg(
@@ -742,7 +748,7 @@ def write_group_cv_report(
     best_model = summary_df.iloc[0]["model"]
     hardest_groups = group_df.loc[group_df["model"] == best_model].sort_values("mae", ascending=False).head(5)
     lines = [
-        "# Strict Group CV Report",
+        "# Strict CV Report",
         "",
         "## Dataset overview",
         f"- Rows: `{len(raw_training_df)}`",
@@ -758,7 +764,7 @@ def write_group_cv_report(
     lines.extend(
         [
             "",
-            "## Strict grouped CV ranking",
+            "## Row-wise CV ranking",
         ]
     )
     for row in summary_df.itertuples(index=False):
@@ -766,7 +772,7 @@ def write_group_cv_report(
     lines.extend(
         [
             "",
-            f"## Hardest held-out groups for `{best_model}`",
+            f"## Hardest material groups for `{best_model}` under row-wise CV predictions",
         ]
     )
     for row in hardest_groups.itertuples(index=False):
@@ -777,9 +783,9 @@ def write_group_cv_report(
         [
             "",
             "## Interpretation",
-            "- Negative or very low grouped R2 means the model can fit within known groups but struggles when an entire material group is held out.",
-            "- If one held-out group is chemically narrow and far from the training-group distribution, grouped holdout can look much worse than row-wise CV even when ordinary CV appears acceptable.",
-            "- For this dataset, improving grouped generalization likely requires more distinct material groups rather than only more repeated points inside the same group.",
+            "- This report now uses row-wise KFold diagnostics so its evaluation family matches the main fixed-holdout modeling workflow.",
+            "- Group summaries below aggregate the out-of-fold row-wise predictions by `group_id`; they are descriptive diagnostics, not grouped holdout scores.",
+            "- If a material group still shows a large aggregated error here, that usually means the feature set or target noise is the limiting factor rather than the split recipe alone.",
         ]
     )
     (OUTPUT_DIR / "strict_group_cv_report.md").write_text("\n".join(lines), encoding="utf-8")

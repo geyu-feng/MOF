@@ -34,7 +34,7 @@ from sklearn.impute import IterativeImputer
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import GroupKFold, GroupShuffleSplit, KFold, ParameterGrid
+from sklearn.model_selection import KFold, ParameterGrid
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -376,12 +376,6 @@ def resolve_data_xlsx() -> Path:
     if PRIMARY_DATA_XLSX.exists():
         return PRIMARY_DATA_XLSX
     raise FileNotFoundError(f"Training workbook not found: {PRIMARY_DATA_XLSX.name}")
-
-def validate_group_count(raw_df: pd.DataFrame, context: str, minimum: int = 2) -> int:
-    group_count = int(raw_df["group_id"].nunique())
-    if group_count < minimum:
-        raise ValueError(f"{context} requires at least {minimum} distinct groups, got {group_count}.")
-    return group_count
 
 def encode_modification_codes(modifications: pd.Series, mod_encoding: str) -> tuple[pd.Series, dict[str, int], list[str]]:
     preset_mapping = MOD_ENCODING_PRESETS[mod_encoding].copy()
