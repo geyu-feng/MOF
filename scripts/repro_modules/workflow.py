@@ -101,7 +101,7 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
 
     target_core_raw, _ = export_target_core_metal_tables()
     target_core_df = build_target_core_feature_table(target_core_raw, "calibrated_mixed", display_training_df, "calibrated")
-    target_core_df.to_csv(OUTPUT_DIR / "core_target_feature_table_5382.csv", index=False)
+    target_core_df.to_csv(OUTPUT_DIR / "core_target_feature_table_selected_metals.csv", index=False)
 
     second_model_name = cv_best_df.iloc[1]["model"]
     screening_mod_weights = get_screening_mod_weights(display_training_df)

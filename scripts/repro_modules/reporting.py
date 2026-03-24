@@ -52,8 +52,8 @@ def write_summary(
             "",
             "## Remaining gaps",
             "- The exact IC/AR/Pol/Ele lookup table is not published, so the calibrated descriptor preset is an informed reconstruction.",
-            "- The local pipeline now uses the 5382 single-metal CoRE subset extracted from the official 14142-entry ASR table, which matches the user's requested candidate set but is still not the paper's unpublished 3833 subset.",
-            "- Model selection follows grouped cross-validation with fold-wise train-only preprocessing on the current local training dataset; holdout-style grouped evaluation is retained separately for display figures.",
+            f"- The local pipeline now uses the `{len(first_df)}` single-metal CoRE subset extracted from the official 14142-entry ASR table, which matches the current user-requested candidate set but is still not the paper's unpublished 3833 subset.",
+            "- Model selection now follows the current fixed holdout workflow used by this local project; downstream display figures reuse the same training logic.",
         ]
     )
     (OUTPUT_DIR / "reproduction_summary.md").write_text("\n".join(lines), encoding="utf-8")

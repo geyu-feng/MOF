@@ -921,7 +921,7 @@ def write_descriptor_source_table(root: Path) -> None:
 ## Scope notes
 
 - `Ag/Co/Cr/Cu/Fe/Zn/Zr` are the metals directly supported by the 801-row training table.
-- `In/Ti/Nd` were added only for the user's 5382-candidate CoRE screening workflow.
+- Additional user-requested metals are handled through the local descriptor preset and current CoRE candidate list.
 - The source paper does not publish the exact `IC/AR/Pol/Ele` lookup table, so every preset in this repository remains an informed approximation.
 """
     (root / "DESCRIPTOR_PRESET_SOURCES.md").write_text(table, encoding="utf-8")
