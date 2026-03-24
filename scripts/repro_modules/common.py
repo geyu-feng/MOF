@@ -773,6 +773,10 @@ def build_target_core_feature_table(
     out["pv"] = pd.to_numeric(out["AV_cm3_g"], errors="coerce")
     out["sa"] = pd.to_numeric(out["ASA_m2_g"], errors="coerce")
     out["vf"] = pd.to_numeric(out["AV_VF"], errors="coerce")
+    # Remove CoRE entries with zero accessible surface area instead of
+    # compressing them to a tiny positive placeholder. These rows distort
+    # Fig. 5(c) and are not useful for SA-based structure-performance analysis.
+    out = out.loc[out["sa"] > 0].copy()
     out["ci"] = 300.0
     out["ad"] = 500.0
     out["time"] = 720.0
