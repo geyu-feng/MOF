@@ -105,6 +105,21 @@ def compute_small_display_jitter(values: np.ndarray, *, seed: int = 42) -> np.nd
     jitter = rng.normal(loc=0.0, scale=jitter_sigma, size=len(numeric))
     return jitter.astype(float)
 
+def compute_fig5_display_window(feature: str, values: np.ndarray) -> tuple[float, float, np.ndarray]:
+    finite = np.asarray(values, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return 0.0, 1.0, np.asarray([0.0, 0.5, 1.0], dtype=float)
+    if feature == "pv":
+        return 0.0, 2.0, np.round(np.arange(0.0, 2.01, 0.2), 6)
+    if feature == "vf":
+        return 0.0, 1.0, np.round(np.arange(0.0, 1.01, 0.2), 6)
+    upper_q = 0.995 if feature in {"pd", "sa"} else 0.999
+    upper = nice_axis_upper(float(np.quantile(finite, upper_q) * 1.03))
+    lower = 0.0
+    ticks = compute_adaptive_ticks(lower, upper, approx_count=5)
+    return float(lower), float(upper), ticks
+
 def prepare_fig2a_structural_data(core_df: pd.DataFrame | None, fi_df: pd.DataFrame) -> pd.DataFrame:
     structural_df = core_df if core_df is not None and not core_df.empty else fi_df.rename(columns={"sa": "sa", "pv": "pv", "pd": "pd", "mpd": "mpd"})
     plot_df = structural_df.copy()
@@ -195,11 +210,15 @@ def save_fig5_like(
         x = screening_df[feature].to_numpy()
         if feature == "pd":
             x = x / 10.0
-        x_lower, x_upper = compute_adaptive_positive_limits(x, lower_floor=lower_floor, pad_fraction=0.04)
-        x_ticks = compute_adaptive_ticks(x_lower, x_upper, approx_count=5)
-        density = gaussian_kde(np.vstack([x, y]))(np.vstack([x, y])) if len(np.unique(x)) > 1 else np.ones_like(x)
+        x_lower, x_upper, x_ticks = compute_fig5_display_window(feature, x)
+        display_mask = np.isfinite(x) & np.isfinite(y_display) & (x >= x_lower) & (x <= x_upper) & (y_display >= y_lower) & (y_display <= y_upper)
+        if int(display_mask.sum()) < 10:
+            display_mask = np.isfinite(x) & np.isfinite(y_display)
+        x_plot = x[display_mask]
+        y_plot = y_display[display_mask]
+        density = gaussian_kde(np.vstack([x_plot, y_plot]))(np.vstack([x_plot, y_plot])) if len(np.unique(x_plot)) > 1 else np.ones_like(x_plot)
         order = np.argsort(density)
-        scatter = ax.scatter(x[order], y_display[order], c=density[order], cmap="turbo", s=7, edgecolors="none")
+        scatter = ax.scatter(x_plot[order], y_plot[order], c=density[order], cmap="turbo", s=7, edgecolors="none")
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Q(mg/g)")
         ax.set_title(letter, pad=1)
