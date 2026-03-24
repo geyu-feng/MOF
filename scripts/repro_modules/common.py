@@ -28,9 +28,7 @@ from PIL import Image  # noqa: F401
 from scipy.stats import gaussian_kde
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.exceptions import ConvergenceWarning
-from sklearn.impute import IterativeImputer
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -219,17 +217,21 @@ BASE_FEATURES = [
 
 TRAINING_FEATURES = [*BASE_FEATURES, "mod_code"]
 
-IMPUTE_FEATURES = ["sa", "pd", "pv", "ci", "ad"]
+STRUCTURAL_IMPUTE_TARGETS = ["pv", "pd"]
 
-TRAIN_IMPUTE_CONTEXT = [
+STRUCTURAL_IMPUTE_CONTEXT = [
+    "sa",
+    "mpd",
+    "ci",
+    "ad",
+    "time",
+    "ph",
+    "temp",
+    "mod_code",
     "ionic_charge",
     "atomic_radius",
     "polarizability",
     "electronegativity",
-    "mod_code",
-    "time",
-    "ph",
-    "temp",
 ]
 
 MOD_LABELS = {
@@ -348,12 +350,142 @@ def add_caption(fig: plt.Figure, text: str, y: float = 0.02) -> None:
 
 # --- core.py ---
 
-def build_iterative_imputer() -> IterativeImputer:
-    return IterativeImputer(
-        estimator=RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1),
+def positive_reference_floor(values: pd.Series, quantile: float = 0.01, default: float = 1e-6) -> float:
+    numeric = pd.to_numeric(values, errors="coerce")
+    numeric = numeric[numeric > 0]
+    if numeric.empty:
+        return float(default)
+    return max(float(numeric.quantile(quantile)), float(default))
+
+
+def mode_or_nan(values: pd.Series) -> float:
+    modes = pd.to_numeric(values, errors="coerce").dropna().mode()
+    if modes.empty:
+        return float("nan")
+    return float(modes.iloc[0])
+
+
+def fill_with_stratified_median(
+    out: pd.DataFrame,
+    fit_df: pd.DataFrame,
+    column: str,
+    strata: list[list[str]],
+) -> pd.Series:
+    filled = pd.to_numeric(out[column], errors="coerce").copy()
+    fit_numeric = pd.to_numeric(fit_df[column], errors="coerce")
+    fit_frame = fit_df.copy()
+    fit_frame[column] = fit_numeric
+
+    for keys in strata:
+        missing_mask = filled.isna()
+        if not missing_mask.any():
+            break
+        stats = fit_frame.groupby(keys, dropna=False)[column].median()
+        mapped = (
+            out.loc[missing_mask, keys]
+            .apply(lambda row: stats.get(tuple(row.values) if len(keys) > 1 else row.iloc[0], np.nan), axis=1)
+            .astype(float)
+        )
+        filled.loc[missing_mask] = mapped.to_numpy()
+
+    if filled.isna().any():
+        global_median = float(fit_numeric.median()) if fit_numeric.notna().any() else float("nan")
+        global_mode = mode_or_nan(fit_numeric)
+        fallback = global_median if np.isfinite(global_median) else global_mode
+        if not np.isfinite(fallback):
+            fallback = 1.0
+        filled = filled.fillna(float(fallback))
+    return filled
+
+
+def fill_experimental_conditions(out: pd.DataFrame, fit_df: pd.DataFrame) -> pd.DataFrame:
+    """Fill CI/AD with stratified medians and positive lower bounds."""
+    result = out.copy()
+    strata = [["metal", "modification"], ["metal"], ["modification"]]
+    for column in ["ci", "ad"]:
+        result[column] = fill_with_stratified_median(result, fit_df, column, strata)
+        floor = positive_reference_floor(fit_df[column])
+        result[column] = pd.to_numeric(result[column], errors="coerce").clip(lower=floor)
+    return result
+
+
+def fit_rf_structural_imputer(
+    fit_df: pd.DataFrame,
+    target: str,
+    predictors: list[str],
+) -> tuple[RandomForestRegressor | None, dict[str, float], float]:
+    train = fit_df.copy()
+    train[target] = pd.to_numeric(train[target], errors="coerce")
+    predictor_frame = train[predictors].apply(pd.to_numeric, errors="coerce")
+    predictor_fill = predictor_frame.median(numeric_only=True).to_dict()
+    target_floor = positive_reference_floor(train[target])
+    valid_mask = train[target].notna()
+    if int(valid_mask.sum()) < 5:
+        return None, predictor_fill, target_floor
+    X_train = predictor_frame.loc[valid_mask].fillna(predictor_fill)
+    y_train = train.loc[valid_mask, target].to_numpy(dtype=float)
+    model = RandomForestRegressor(
+        n_estimators=300,
+        min_samples_leaf=3,
         random_state=42,
-        max_iter=20,
+        n_jobs=-1,
     )
+    model.fit(X_train, y_train)
+    return model, predictor_fill, target_floor
+
+
+def warn_if_imputed_distribution_anomalous(
+    target: str,
+    imputed_values: pd.Series,
+    reference_values: pd.Series,
+    floor: float,
+) -> None:
+    imputed = pd.to_numeric(imputed_values, errors="coerce").dropna()
+    reference = pd.to_numeric(reference_values, errors="coerce").dropna()
+    if imputed.empty or reference.empty:
+        return
+    ref_low, ref_high = reference.quantile([0.01, 0.99]).tolist()
+    imp_median = float(imputed.median())
+    floor_share = float((imputed <= floor * 1.000001).mean())
+    if imp_median < ref_low or imp_median > ref_high or floor_share > 0.25:
+        warnings.warn(
+            (
+                f"Imputed {target} distribution may be abnormal: "
+                f"median={imp_median:.4g}, reference 1%-99%=[{ref_low:.4g}, {ref_high:.4g}], "
+                f"floor_share={floor_share:.1%}"
+            ),
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+def impute_structural_feature(
+    out: pd.DataFrame,
+    fit_df: pd.DataFrame,
+    target: str,
+    predictors: list[str],
+) -> pd.DataFrame:
+    result = out.copy()
+    result[target] = pd.to_numeric(result[target], errors="coerce")
+    model, predictor_fill, floor = fit_rf_structural_imputer(fit_df, target, predictors)
+    missing_mask = result[target].isna()
+    if not missing_mask.any():
+        result[target] = result[target].clip(lower=floor)
+        return result
+    if model is None:
+        fallback = float(pd.to_numeric(fit_df[target], errors="coerce").median())
+        if not np.isfinite(fallback):
+            fallback = floor
+        result.loc[missing_mask, target] = fallback
+        result[target] = pd.to_numeric(result[target], errors="coerce").clip(lower=floor)
+        warn_if_imputed_distribution_anomalous(target, result.loc[missing_mask, target], fit_df[target], floor)
+        return result
+    X_missing = result.loc[missing_mask, predictors].apply(pd.to_numeric, errors="coerce").fillna(predictor_fill)
+    predicted = model.predict(X_missing)
+    result.loc[missing_mask, target] = np.maximum(predicted, floor)
+    result[target] = pd.to_numeric(result[target], errors="coerce").clip(lower=floor)
+    warn_if_imputed_distribution_anomalous(target, result.loc[missing_mask, target], fit_df[target], floor)
+    return result
 
 def sanitize_physical_features(df: pd.DataFrame, fit_df: pd.DataFrame) -> pd.DataFrame:
     """Clip physically invalid values after imputation using train-side limits only."""
@@ -363,7 +495,8 @@ def sanitize_physical_features(df: pd.DataFrame, fit_df: pd.DataFrame) -> pd.Dat
     sa_floor = float(positive_sa.quantile(0.01)) if not positive_sa.empty else 1e-6
     out["sa"] = pd.to_numeric(out["sa"], errors="coerce").clip(lower=max(sa_floor, 1e-6))
     for col in ["pd", "pv", "ci", "ad"]:
-        out[col] = pd.to_numeric(out[col], errors="coerce").clip(lower=0.0)
+        floor = positive_reference_floor(fit_df[col])
+        out[col] = pd.to_numeric(out[col], errors="coerce").clip(lower=floor)
     return out
 
 def derive_mpd(pv: pd.Series, sa: pd.Series) -> pd.Series:
@@ -409,14 +542,34 @@ def get_mod_plot_label(name: str) -> str:
     return alnum[:4].upper()
 
 def prepare_model_table(df: pd.DataFrame, fit_df: pd.DataFrame | None = None) -> pd.DataFrame:
-    """Apply the paper-style preprocessing pipeline with train-only fitted state."""
+    """Apply train-only preprocessing with stratified CI/AD fill and RF structural imputation for PD/PV."""
     fit_df = df if fit_df is None else fit_df
     out = df.copy()
-    context_cols = [*TRAIN_IMPUTE_CONTEXT, *IMPUTE_FEATURES]
-    imputer = build_iterative_imputer()
-    imputer.fit(fit_df[context_cols])
-    transformed = pd.DataFrame(imputer.transform(out[context_cols]), columns=context_cols, index=out.index)
-    out[IMPUTE_FEATURES] = transformed[IMPUTE_FEATURES]
+    fit_numeric = fit_df.copy()
+    out["ph"] = pd.to_numeric(out["ph"], errors="coerce").fillna(7.0)
+    out["temp"] = pd.to_numeric(out["temp"], errors="coerce").fillna(298.0)
+    out["time"] = pd.to_numeric(out["time"], errors="coerce")
+    out["sa"] = pd.to_numeric(out["sa"], errors="coerce")
+    fit_numeric["time"] = pd.to_numeric(fit_numeric["time"], errors="coerce")
+    fit_numeric["sa"] = pd.to_numeric(fit_numeric["sa"], errors="coerce")
+    if out["time"].isna().any():
+        time_fill = float(pd.to_numeric(fit_numeric["time"], errors="coerce").median())
+        if not np.isfinite(time_fill):
+            time_fill = 0.0
+        out["time"] = out["time"].fillna(time_fill)
+    if out["sa"].isna().any():
+        sa_fill = float(pd.to_numeric(fit_numeric["sa"], errors="coerce").median())
+        if not np.isfinite(sa_fill):
+            sa_fill = positive_reference_floor(fit_numeric["sa"])
+        out["sa"] = out["sa"].fillna(sa_fill)
+    out = fill_experimental_conditions(out, fit_numeric)
+    out = sanitize_physical_features(out, fit_df)
+    out["mpd"] = derive_mpd(out["pv"], out["sa"])
+    pv_predictors = [feature for feature in [*STRUCTURAL_IMPUTE_CONTEXT, "pd"] if feature != "pv"]
+    out = impute_structural_feature(out, fit_numeric, "pv", pv_predictors)
+    out["mpd"] = derive_mpd(out["pv"], out["sa"])
+    pd_predictors = [feature for feature in [*STRUCTURAL_IMPUTE_CONTEXT, "pv"] if feature != "pd"]
+    out = impute_structural_feature(out, fit_numeric, "pd", pd_predictors)
     out = sanitize_physical_features(out, fit_df)
     out["mpd"] = derive_mpd(out["pv"], out["sa"])
     median_mpd = float(out["mpd"].dropna().median()) if out["mpd"].notna().any() else 0.0
