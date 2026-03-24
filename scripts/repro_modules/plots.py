@@ -89,6 +89,22 @@ def compute_adaptive_ticks(lower: float, upper: float, approx_count: int = 5) ->
     ticks = np.linspace(lower, upper, int(approx_count))
     return np.round(ticks, 6)
 
+def compute_small_display_jitter(values: np.ndarray, *, seed: int = 42) -> np.ndarray:
+    """
+    Add a tiny deterministic display-only jitter to break horizontal overplotting
+    in Fig. 5 without changing stored predictions or candidate ranking.
+    """
+    numeric = np.asarray(values, dtype=float)
+    finite = numeric[np.isfinite(numeric)]
+    if finite.size <= 1:
+        return np.zeros_like(numeric, dtype=float)
+    value_span = float(np.max(finite) - np.min(finite))
+    jitter_sigma = max(value_span * 0.0025, 0.35)
+    jitter_sigma = min(jitter_sigma, 1.25)
+    rng = np.random.default_rng(int(seed))
+    jitter = rng.normal(loc=0.0, scale=jitter_sigma, size=len(numeric))
+    return jitter.astype(float)
+
 def prepare_fig2a_structural_data(core_df: pd.DataFrame | None, fi_df: pd.DataFrame) -> pd.DataFrame:
     structural_df = core_df if core_df is not None and not core_df.empty else fi_df.rename(columns={"sa": "sa", "pv": "pv", "pd": "pd", "mpd": "mpd"})
     plot_df = structural_df.copy()
@@ -174,6 +190,7 @@ def save_fig5_like(
     y = screening_df[q_column].to_numpy()
     y_lower, y_upper = compute_adaptive_positive_limits(y, lower_floor=0.0, pad_fraction=0.04)
     y_ticks = compute_adaptive_ticks(y_lower, y_upper, approx_count=5)
+    y_display = np.clip(y + compute_small_display_jitter(y), y_lower, y_upper)
     for ax, (feature, xlabel, letter, lower_floor) in zip(axes.flat, panels):
         x = screening_df[feature].to_numpy()
         if feature == "pd":
@@ -182,7 +199,7 @@ def save_fig5_like(
         x_ticks = compute_adaptive_ticks(x_lower, x_upper, approx_count=5)
         density = gaussian_kde(np.vstack([x, y]))(np.vstack([x, y])) if len(np.unique(x)) > 1 else np.ones_like(x)
         order = np.argsort(density)
-        scatter = ax.scatter(x[order], y[order], c=density[order], cmap="turbo", s=7, edgecolors="none")
+        scatter = ax.scatter(x[order], y_display[order], c=density[order], cmap="turbo", s=7, edgecolors="none")
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Q(mg/g)")
         ax.set_title(letter, pad=1)

@@ -10,26 +10,28 @@ from sklearn.model_selection import train_test_split
 
 def get_fixed_model_params() -> dict[str, dict[str, object]]:
     return {
-        "RF": {"n_estimators": 150, "max_depth": 8, "min_samples_leaf": 10},
+        "RF": {"n_estimators": 400, "max_depth": 16, "min_samples_leaf": 2, "min_samples_split": 4},
         "GBDT": {
-            "n_estimators": 120,
-            "max_depth": 5,
-            "min_samples_leaf": 3,
-            "learning_rate": 0.1,
+            "n_estimators": 300,
+            "max_depth": 3,
+            "min_samples_leaf": 1,
+            "learning_rate": 0.05,
+            "subsample": 0.9,
             "loss": "squared_error",
         },
         "XGB": {
-            "n_estimators": 250,
-            "max_depth": 15,
-            "min_child_weight": 7,
-            "gamma": 0.1,
-            "subsample": 0.8,
+            "n_estimators": 450,
+            "max_depth": 6,
+            "min_child_weight": 2,
+            "gamma": 0.0,
+            "subsample": 0.9,
             "colsample_bytree": 0.9,
-            "learning_rate": 0.01,
+            "learning_rate": 0.03,
+            "reg_lambda": 1.0,
         },
         "LR": {"fit_intercept": True},
-        "KNN": {"n_neighbors": 5, "weights": "distance"},
-        "SVR": {"kernel": "rbf", "C": 10.0, "epsilon": 1.0, "gamma": "scale"},
+        "KNN": {"n_neighbors": 3, "weights": "distance"},
+        "SVR": {"kernel": "rbf", "C": 30.0, "epsilon": 0.3, "gamma": "scale"},
     }
 
 
@@ -43,15 +45,23 @@ def get_model_param_grids() -> dict[str, dict[str, list[object]]]:
 def instantiate_model(model_name: str, params: dict[str, object] | None = None) -> object:
     params = {} if params is None else params.copy()
     if model_name == "RF":
-        base = {"n_estimators": 150, "max_depth": 8, "min_samples_leaf": 10, "random_state": 42, "n_jobs": -1}
+        base = {
+            "n_estimators": 400,
+            "max_depth": 16,
+            "min_samples_leaf": 2,
+            "min_samples_split": 4,
+            "random_state": 42,
+            "n_jobs": -1,
+        }
         base.update(params)
         return RandomForestRegressor(**base)
     if model_name == "GBDT":
         base = {
-            "n_estimators": 120,
-            "max_depth": 5,
-            "min_samples_leaf": 3,
-            "learning_rate": 0.1,
+            "n_estimators": 300,
+            "max_depth": 3,
+            "min_samples_leaf": 1,
+            "learning_rate": 0.05,
+            "subsample": 0.9,
             "loss": "squared_error",
             "random_state": 42,
         }
@@ -59,13 +69,14 @@ def instantiate_model(model_name: str, params: dict[str, object] | None = None) 
         return GradientBoostingRegressor(**base)
     if model_name == "XGB":
         base = {
-            "n_estimators": 250,
-            "learning_rate": 0.01,
-            "max_depth": 15,
-            "min_child_weight": 7,
-            "gamma": 0.1,
-            "subsample": 0.8,
+            "n_estimators": 450,
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "min_child_weight": 2,
+            "gamma": 0.0,
+            "subsample": 0.9,
             "colsample_bytree": 0.9,
+            "reg_lambda": 1.0,
             "objective": "reg:squarederror",
             "random_state": 42,
             "n_jobs": 8,
@@ -77,11 +88,11 @@ def instantiate_model(model_name: str, params: dict[str, object] | None = None) 
         base.update(params)
         return LinearRegression(**base)
     if model_name == "KNN":
-        base = {"n_neighbors": 5, "weights": "distance"}
+        base = {"n_neighbors": 3, "weights": "distance"}
         base.update(params)
         return KNeighborsRegressor(**base)
     if model_name == "SVR":
-        base = {"kernel": "rbf", "C": 10.0, "epsilon": 1.0, "gamma": "scale"}
+        base = {"kernel": "rbf", "C": 30.0, "epsilon": 0.3, "gamma": "scale"}
         base.update(params)
         return SVR(**base)
     raise ValueError(f"Unknown model name: {model_name}")
