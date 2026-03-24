@@ -136,7 +136,13 @@ def save_fig3_like(predictions: dict[str, dict[str, pd.DataFrame]], metrics: pd.
     fig.savefig(OUTPUT_DIR / filename, dpi=300)
     plt.close(fig)
 
-def save_fig5_like(screening_df: pd.DataFrame, filename: str) -> None:
+def save_fig5_like(
+    screening_df: pd.DataFrame,
+    filename: str,
+    *,
+    q_column: str = "first_model_q",
+    caption_text: str = "Fig. 5. Structure-adsorption capacity relationships of MOFs.",
+) -> None:
     # Main-text Fig. 5: structure-performance relationships on first adsorption dataset.
     set_paper_rcparams()
     fig, axes = plt.subplots(2, 2, figsize=(7.1, 4.8))
@@ -146,7 +152,7 @@ def save_fig5_like(screening_df: pd.DataFrame, filename: str) -> None:
         ("sa", "SA(m$^2$/g)", "(c)", (0.0, 6000.0), np.arange(0.0, 6001.0, 1000.0)),
         ("vf", "VF", "(d)", (0.2, 1.0), np.arange(0.2, 1.01, 0.1)),
     ]
-    y = screening_df["first_model_q"].to_numpy()
+    y = screening_df[q_column].to_numpy()
     y_upper = max(160.0, float(np.nanmax(y) * 1.01))
     y_ticks = [0, 50, 100, 150]
     for ax, (feature, xlabel, letter, xlim, xticks) in zip(axes.flat, panels):
@@ -168,7 +174,7 @@ def save_fig5_like(screening_df: pd.DataFrame, filename: str) -> None:
             ax.ticklabel_format(axis="x", style="plain")
         fig.colorbar(scatter, ax=ax, fraction=0.046, pad=0.02)
     fig.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.14, wspace=0.28, hspace=0.34)
-    add_caption(fig, "Fig. 5. Structure-adsorption capacity relationships of MOFs.")
+    add_caption(fig, caption_text)
     fig.savefig(OUTPUT_DIR / filename, dpi=300)
     plt.close(fig)
 

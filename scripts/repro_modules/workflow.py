@@ -35,7 +35,35 @@ def pick_display_config(metric_frames: dict[str, object]) -> str:
     scored = {name: score_metric_frame(frame) for name, frame in metric_frames.items()}
     return min(scored, key=scored.get)
 
-def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) -> int:
+
+def render_all_model_fig5s(
+    target_core_df: pd.DataFrame,
+    tuned_full_pipes: dict[str, Pipeline],
+    display_training_df: pd.DataFrame,
+) -> None:
+    """Render one Fig. 5 style structure-performance plot for each of the six trained models."""
+    screening_mod_weights = get_screening_mod_weights(display_training_df)
+    for model_name in MODEL_ORDER:
+        if model_name not in tuned_full_pipes:
+            continue
+        first_adsorption_df = make_first_adsorption_dataset(
+            target_core_df,
+            model_name,
+            tuned_full_pipes[model_name],
+            screening_mod_weights,
+        )
+        save_fig5_like(
+            first_adsorption_df,
+            f"fig5_{model_name.lower()}_structure_relationships.png",
+            q_column="first_model_q",
+            caption_text=f"Fig. 5 ({model_name}). Structure-adsorption capacity relationships of MOFs.",
+        )
+
+def run_reproduction(
+    skip_supplementary: bool = False,
+    fig3_only: bool = False,
+    fig5_all_models: bool = False,
+) -> int:
     ensure_output_dir()
     if fig3_only:
         isolate_fig3_only_outputs()
@@ -161,6 +189,8 @@ def run_reproduction(skip_supplementary: bool = False, fig3_only: bool = False) 
         prepared_training_df=display_training_df,
     )
     save_fig5_like(first_adsorption_df, "fig5_structure_relationships.png")
+    if fig5_all_models:
+        render_all_model_fig5s(target_core_df, tuned_full_pipes, display_training_df)
 
     if not skip_supplementary:
         # Supplementary Fig. S5 and Fig. S6
