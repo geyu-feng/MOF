@@ -250,7 +250,7 @@ METAL_ORDER = ["Fe", "Cr", "Zr", "Zn", "Co", "Cu", "Ag"]
 MOD_ORDER = ["Unmodified", "Functionalized", "Magnetic", "Carbonized", "Composite"]
 SCREENING_MOD_STRATEGY = "training_distribution_marginalized"
 
-TARGET_CORE_METALS = ["Zn", "In", "Fe", "Cu", "Ti", "Zr", "Nd"]
+TARGET_CORE_METALS = ["Zn", "Cu", "Zr", "Cr", "Nd", "Sm", "Ni"]
 
 MODEL_ORDER = ["RF", "GBDT", "XGB", "LR", "KNN", "SVR"]
 GROUP_AWARE_TUNING_GROUP_THRESHOLD = 20
@@ -500,6 +500,23 @@ def sanitize_physical_features(df: pd.DataFrame, fit_df: pd.DataFrame) -> pd.Dat
     for col in ["pd", "pv", "ci", "ad"]:
         floor = positive_reference_floor(fit_df[col])
         out[col] = pd.to_numeric(out[col], errors="coerce").clip(lower=floor)
+    return out
+
+def sanitize_candidate_core_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply only minimal physical cleanup for CoRE candidates.
+
+    The candidate library should keep its native structural spread instead of
+    being pulled up to train-side lower quantiles, otherwise Fig. 5 collapses
+    many candidates onto the same lower-bound SA value.
+    """
+    out = df.copy()
+    out["sa"] = pd.to_numeric(out["sa"], errors="coerce").clip(lower=1e-6)
+    out["pd"] = pd.to_numeric(out["pd"], errors="coerce").clip(lower=1e-6)
+    out["pv"] = pd.to_numeric(out["pv"], errors="coerce").clip(lower=1e-6)
+    out["ci"] = pd.to_numeric(out["ci"], errors="coerce").clip(lower=1e-6)
+    out["ad"] = pd.to_numeric(out["ad"], errors="coerce").clip(lower=1e-6)
+    out["vf"] = pd.to_numeric(out["vf"], errors="coerce").clip(lower=0.0, upper=1.0)
     return out
 
 def derive_mpd(pv: pd.Series, sa: pd.Series) -> pd.Series:
@@ -761,7 +778,7 @@ def build_target_core_feature_table(
     out["time"] = 720.0
     out["ph"] = 7.0
     out["temp"] = 298.0
-    out = sanitize_physical_features(out, fit_df)
+    out = sanitize_candidate_core_features(out)
     out["mpd"] = derive_mpd(out["pv"], out["sa"]).fillna(float(fit_df["mpd"].median()))
     out["modification"] = "Marginalized"
     out["mod_code"] = np.nan
