@@ -70,6 +70,25 @@ def annotate_bar_values(ax: plt.Axes, bars, values: Iterable[float], fontsize: f
             clip_on=False,
         )
 
+
+def compute_adaptive_positive_limits(values: np.ndarray, lower_floor: float = 0.0, pad_fraction: float = 0.03) -> tuple[float, float]:
+    finite = np.asarray(values, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        upper = nice_axis_upper(max(lower_floor + 1.0, 1.0))
+        return float(lower_floor), float(upper)
+    vmax = float(np.max(finite))
+    padded_max = vmax * (1.0 + float(pad_fraction))
+    upper = nice_axis_upper(max(padded_max, lower_floor + 1.0))
+    return float(lower_floor), float(upper)
+
+
+def compute_adaptive_ticks(lower: float, upper: float, approx_count: int = 5) -> np.ndarray:
+    if upper <= lower:
+        return np.asarray([lower, upper], dtype=float)
+    ticks = np.linspace(lower, upper, int(approx_count))
+    return np.round(ticks, 6)
+
 def prepare_fig2a_structural_data(core_df: pd.DataFrame | None, fi_df: pd.DataFrame) -> pd.DataFrame:
     structural_df = core_df if core_df is not None and not core_df.empty else fi_df.rename(columns={"sa": "sa", "pv": "pv", "pd": "pd", "mpd": "mpd"})
     plot_df = structural_df.copy()
@@ -147,27 +166,29 @@ def save_fig5_like(
     set_paper_rcparams()
     fig, axes = plt.subplots(2, 2, figsize=(7.1, 4.8))
     panels = [
-        ("pd", "LCD(nm)", "(a)", (0.0, 7.0), np.arange(0.0, 7.5, 0.5)),
-        ("pv", "PV(cm$^3$/g)", "(b)", (0.0, 2.0), np.arange(0.0, 2.1, 0.2)),
-        ("sa", "SA(m$^2$/g)", "(c)", (0.0, 6000.0), np.arange(0.0, 6001.0, 1000.0)),
-        ("vf", "VF", "(d)", (0.2, 1.0), np.arange(0.2, 1.01, 0.1)),
+        ("pd", "LCD(nm)", "(a)", 0.0),
+        ("pv", "PV(cm$^3$/g)", "(b)", 0.0),
+        ("sa", "SA(m$^2$/g)", "(c)", 0.0),
+        ("vf", "VF", "(d)", 0.0),
     ]
     y = screening_df[q_column].to_numpy()
-    y_upper = max(160.0, float(np.nanmax(y) * 1.01))
-    y_ticks = [0, 50, 100, 150]
-    for ax, (feature, xlabel, letter, xlim, xticks) in zip(axes.flat, panels):
+    y_lower, y_upper = compute_adaptive_positive_limits(y, lower_floor=0.0, pad_fraction=0.04)
+    y_ticks = compute_adaptive_ticks(y_lower, y_upper, approx_count=5)
+    for ax, (feature, xlabel, letter, lower_floor) in zip(axes.flat, panels):
         x = screening_df[feature].to_numpy()
         if feature == "pd":
             x = x / 10.0
+        x_lower, x_upper = compute_adaptive_positive_limits(x, lower_floor=lower_floor, pad_fraction=0.04)
+        x_ticks = compute_adaptive_ticks(x_lower, x_upper, approx_count=5)
         density = gaussian_kde(np.vstack([x, y]))(np.vstack([x, y])) if len(np.unique(x)) > 1 else np.ones_like(x)
         order = np.argsort(density)
         scatter = ax.scatter(x[order], y[order], c=density[order], cmap="turbo", s=7, edgecolors="none")
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Q(mg/g)")
         ax.set_title(letter, pad=1)
-        ax.set_xlim(*xlim)
-        ax.set_xticks(xticks)
-        ax.set_ylim(0.0, y_upper)
+        ax.set_xlim(x_lower, x_upper)
+        ax.set_xticks(x_ticks)
+        ax.set_ylim(y_lower, y_upper)
         ax.set_yticks(y_ticks)
         style_small_axis(ax)
         if feature == "sa":
