@@ -813,7 +813,11 @@ def build_target_core_feature_table(
         "doi_public",
         "source_file",
     ]
-    required_columns = [col for col in ordered_columns if col not in {"modification", "mod_code", "mod_strategy"}]
+    required_columns = [
+        col
+        for col in ordered_columns
+        if col not in {"modification", "mod_code", "mod_strategy", "doi_public"}
+    ]
     out = out[ordered_columns].dropna(subset=required_columns).reset_index(drop=True)
     return out
 
