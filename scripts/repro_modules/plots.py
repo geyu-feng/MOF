@@ -349,13 +349,13 @@ def save_fig2_like(
 def save_fig2a_relationship(core_df: pd.DataFrame | None, fallback_df: pd.DataFrame, filename: str) -> None:
     # Standalone export of Fig. 2(a): 3D structural relationship panel.
     set_paper_rcparams()
-    fig = plt.figure(figsize=(4.0, 3.6))
+    fig = plt.figure(figsize=(4.6, 4.0))
     ax = fig.add_subplot(111, projection="3d")
     plot_df = prepare_fig2a_structural_data(core_df, fallback_df)
     ax.scatter(plot_df["x"], plot_df["y"], plot_df["z"], c=FIG2_GREEN, s=3, alpha=0.55, edgecolors="none")
     style_fig2a_axis(ax, plot_df)
-    ax.set_title("(a)", pad=-10)
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
+    ax.set_title("")
+    ax.set_position([0.11, 0.07, 0.78, 0.82])
     fig.savefig(OUTPUT_DIR / filename, dpi=300)
     plt.close(fig)
 
