@@ -759,6 +759,52 @@ def export_target_core_metal_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
     count_df.to_csv(ROOT / "outputs" / "core_target_metal_counts.csv", index=False)
     return subset, count_df
 
+def infer_doi_from_cif_file(cif_file: str) -> str | None:
+    """
+    Recover only high-confidence DOI strings from filename patterns.
+
+    Many CoRE filenames are plain CSD-like refcodes, so this helper only fills
+    obvious ACS/RSC-style article identifiers and leaves the rest blank.
+    """
+    name = str(cif_file).strip()
+    if not name:
+        return None
+    lower = name.lower()
+
+    match = re.match(r"^(jacs\.[0-9a-z]+)", lower)
+    if match:
+        return f"10.1021/{match.group(1)}"
+
+    match = re.match(r"^(ja\d{5,}[a-z]?)", lower)
+    if match:
+        return f"10.1021/{match.group(1)}"
+
+    match = re.match(r"^(jp\d{5,}[a-z]?)", lower)
+    if match:
+        return f"10.1021/{match.group(1)}"
+
+    match = re.match(r"^(cg\d{5,}[a-z]?)", lower)
+    if match:
+        return f"10.1021/{match.group(1)}"
+
+    match = re.match(r"^(c\d[a-z]{2}\d{5}[a-z])", lower)
+    if match:
+        return f"10.1039/{match.group(1)}"
+
+    return None
+
+def enrich_candidate_doi_public(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    raw_doi = (
+        out.get("doi_public", pd.Series(index=out.index, dtype=object))
+        .astype(str)
+        .str.strip()
+        .replace({"": np.nan, "nan": np.nan, "NaN": np.nan, "None": np.nan})
+    )
+    inferred = out["cif_file"].map(infer_doi_from_cif_file)
+    out["doi_public"] = raw_doi.fillna(inferred)
+    return out
+
 def build_target_core_feature_table(
     raw_subset: pd.DataFrame,
     descriptor_preset: str,
@@ -789,6 +835,7 @@ def build_target_core_feature_table(
     out["mod_strategy"] = SCREENING_MOD_STRATEGY
     props = out["metal"].map(DESCRIPTOR_PRESETS[descriptor_preset]).apply(pd.Series)
     out = pd.concat([out, props], axis=1)
+    out = enrich_candidate_doi_public(out)
     out["source_file"] = "2019-11-01-ASR-internal_14142.csv"
     ordered_columns = [
         "cif_file",
