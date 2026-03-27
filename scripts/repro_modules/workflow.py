@@ -62,7 +62,7 @@ def render_all_model_fig5s(
 def run_reproduction(
     skip_supplementary: bool = False,
     fig3_only: bool = False,
-    fig5_all_models: bool = False,
+    fig5_all_models: bool = True,
 ) -> int:
     ensure_output_dir()
     if fig3_only:

@@ -39,12 +39,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description='Reproduce the Cr(VI)-MOF machine learning paper figures and tables.')
     parser.add_argument('--skip-supplementary', action='store_true', help='Skip SHAP supplementary figure generation.')
     parser.add_argument('--fig3-only', action='store_true', help='Run only the model-selection and Fig. 3 evaluation path.')
-    parser.add_argument('--fig5-all-models', action='store_true', help='Additionally render Fig. 5 for all six trained models.')
+    parser.add_argument(
+        '--single-fig5-only',
+        action='store_true',
+        help='Disable the default all-model Fig. 5 exports and keep only the main Fig. 5.',
+    )
     args = parser.parse_args()
     code = run_reproduction(
         skip_supplementary=args.skip_supplementary,
         fig3_only=args.fig3_only,
-        fig5_all_models=args.fig5_all_models,
+        fig5_all_models=not args.single_fig5_only,
     )
     update_readme()
     return code
