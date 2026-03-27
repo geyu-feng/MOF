@@ -767,7 +767,7 @@ def build_target_core_feature_table(
 ) -> pd.DataFrame:
     # Build the candidate CoRE-MOF feature table used by screening/Fig. 5.
     out = raw_subset.copy()
-    out = out.rename(columns={"filename": "cif_file", "All_Metals": "metal"}).copy()
+    out = out.rename(columns={"filename": "cif_file", "All_Metals": "metal", "DOI_public": "doi_public"}).copy()
     out["metal"] = out["metal"].astype(str).str.strip()
     out["pd"] = pd.to_numeric(out["LCD"], errors="coerce")
     out["pv"] = pd.to_numeric(out["AV_cm3_g"], errors="coerce")
@@ -810,6 +810,7 @@ def build_target_core_feature_table(
         "atomic_radius",
         "polarizability",
         "electronegativity",
+        "doi_public",
         "source_file",
     ]
     required_columns = [col for col in ordered_columns if col not in {"modification", "mod_code", "mod_strategy"}]
