@@ -289,10 +289,10 @@ def save_fig2_like(
     filename: str,
     workflow_counts: dict[str, int] | None = None,
 ) -> pd.DataFrame:
-    # Main-text Fig. 2 combined panel: (a) structure relation, (b) workflow, (c) feature importance.
+    # Main-text Fig. 2 combined panel: (a) structure relation and (c) feature importance.
     set_paper_rcparams()
-    fig = plt.figure(figsize=(7.1, 4.8))
-    gs = fig.add_gridspec(2, 2, height_ratios=[1.45, 0.85], width_ratios=[1.1, 1.0])
+    fig = plt.figure(figsize=(6.2, 4.9))
+    gs = fig.add_gridspec(2, 1, height_ratios=[1.55, 0.9])
 
     ax1 = fig.add_subplot(gs[0, 0], projection="3d")
     plot_df = prepare_fig2a_structural_data(core_df, fallback_df)
@@ -300,30 +300,7 @@ def save_fig2_like(
     style_fig2a_axis(ax1, plot_df)
     ax1.set_title("(a)", pad=-10)
 
-    ax2 = fig.add_subplot(gs[0, 1])
-    workflow_counts = {} if workflow_counts is None else workflow_counts
-    training_rows = int(workflow_counts.get("training_rows", len(fallback_df)))
-    model_count = int(workflow_counts.get("model_count", len(MODEL_ORDER)))
-    candidate_rows = int(workflow_counts.get("candidate_rows", 0 if core_df is None else len(core_df)))
-    initial_rows = int(workflow_counts.get("initial_rows", 0))
-    steps = [
-        (f"{training_rows}\nliterature\nrecords", (0.18, 0.83)),
-        (f"{model_count} model\ncomparison", (0.52, 0.83)),
-        (f"{candidate_rows} CoRE\ncandidates", (0.84, 0.83)),
-        ("Top 10 per\nmetal", (0.36, 0.40)),
-        (f"{initial_rows} initial\nscreening", (0.66, 0.40)),
-    ]
-    for text, (x, y) in steps:
-        ax2.text(x, y, text, ha="center", va="center", fontsize=7, bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="black", lw=0.8))
-    arrows = [((0.28, 0.83), (0.42, 0.83)), ((0.62, 0.83), (0.74, 0.83)), ((0.84, 0.70), (0.70, 0.48)), ((0.48, 0.40), (0.54, 0.40))]
-    for start, end in arrows:
-        ax2.annotate("", xy=end, xytext=start, arrowprops=dict(arrowstyle="->", lw=0.8, color="black"))
-    ax2.set_xlim(0, 1)
-    ax2.set_ylim(0, 1)
-    ax2.axis("off")
-    ax2.set_title("(b)", pad=0)
-
-    ax3 = fig.add_subplot(gs[1, :])
+    ax3 = fig.add_subplot(gs[1, 0])
     ordered = importance_df.sort_values("reproduced_importance", ascending=False)
     bars = ax3.bar(
         ordered["feature"],
@@ -340,8 +317,8 @@ def save_fig2_like(
     ax3.tick_params(axis="x", rotation=0)
     annotate_bar_values(ax3, bars, ordered["reproduced_importance"], decimals=1)
 
-    fig.subplots_adjust(left=0.06, right=0.98, top=0.96, bottom=0.16, wspace=0.15, hspace=0.28)
-    add_caption(fig, "Fig. 2. Structural overview, workflow, and feature importance.")
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.96, bottom=0.16, hspace=0.3)
+    add_caption(fig, "Fig. 2. Structural overview and feature importance.")
     fig.savefig(OUTPUT_DIR / filename, dpi=300)
     plt.close(fig)
     return plot_df
