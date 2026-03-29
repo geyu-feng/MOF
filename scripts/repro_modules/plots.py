@@ -229,7 +229,8 @@ def save_fig5_like(
         style_small_axis(ax)
         if feature == "sa":
             ax.ticklabel_format(axis="x", style="plain")
-        fig.colorbar(scatter, ax=ax, fraction=0.04, pad=0.03)
+        cbar = fig.colorbar(scatter, ax=ax, fraction=0.04, pad=0.03)
+        cbar.set_label("Frequency")
     fig.subplots_adjust(left=0.08, right=0.955, top=0.95, bottom=0.14, wspace=0.34, hspace=0.34)
     add_caption(fig, caption_text)
     fig.savefig(OUTPUT_DIR / filename, dpi=300, bbox_inches="tight", pad_inches=0.06)
