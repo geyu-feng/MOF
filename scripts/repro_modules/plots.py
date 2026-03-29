@@ -282,6 +282,126 @@ def compute_feature_importance_table(pipe: Pipeline, training_df: pd.DataFrame, 
     out["importance_source"] = importance_source
     return out
 
+def _aggregate_feature_series(raw_importance: pd.Series) -> pd.Series:
+    return pd.Series(
+        {
+            "MT": raw_importance[["ionic_charge", "atomic_radius", "polarizability", "electronegativity"]].sum(),
+            "ModM": raw_importance["mod_code"],
+            "SA": raw_importance["sa"],
+            "MPD": raw_importance["mpd"],
+            "PD": raw_importance["pd"],
+            "PV": raw_importance["pv"],
+            "CI": raw_importance["ci"],
+            "AD": raw_importance["ad"],
+            "Time": raw_importance["time"],
+            "pH": raw_importance["ph"],
+            "Tem": raw_importance["temp"],
+        }
+    )
+
+def compute_repeated_permutation_importance(
+    raw_training_df: pd.DataFrame,
+    model_name: str,
+    model_params: dict[str, object],
+    *,
+    n_splits: int = 5,
+    test_size: float = 0.1,
+    perm_repeats: int = 20,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    split_rows: list[dict[str, object]] = []
+    split_seeds = [DEFAULT_SPLIT_SEED + 17 * idx for idx in range(int(n_splits))]
+
+    for split_idx, split_seed in enumerate(split_seeds, start=1):
+        train_idx, test_idx = train_test_split(
+            np.arange(len(raw_training_df)),
+            test_size=float(test_size),
+            random_state=int(split_seed),
+            shuffle=True,
+        )
+        raw_train_df = raw_training_df.iloc[train_idx].copy()
+        raw_test_df = raw_training_df.iloc[test_idx].copy()
+        train_df = prepare_model_table(raw_train_df, fit_df=raw_train_df)
+        test_df = prepare_model_table(raw_test_df, fit_df=raw_train_df)
+
+        pipe = Pipeline(
+            [
+                ("prep", build_preprocessor(TRAINING_FEATURES, model_name)),
+                ("model", instantiate_model(model_name, model_params)),
+            ]
+        )
+        pipe.fit(train_df[TRAINING_FEATURES], train_df["q"].to_numpy())
+        result = permutation_importance(
+            pipe,
+            test_df[TRAINING_FEATURES],
+            test_df["q"].to_numpy(),
+            scoring="neg_mean_absolute_error",
+            n_repeats=int(perm_repeats),
+            random_state=int(split_seed),
+            n_jobs=-1,
+        )
+        raw_importance = pd.Series(np.asarray(result.importances_mean, dtype=float), index=TRAINING_FEATURES)
+        aggregated = _aggregate_feature_series(raw_importance)
+        for feature_name, importance_value in aggregated.items():
+            split_rows.append(
+                {
+                    "split_id": split_idx,
+                    "split_seed": int(split_seed),
+                    "feature": feature_name,
+                    "delta_mae": float(importance_value),
+                    "model": model_name,
+                    "importance_source": "permutation_holdout",
+                }
+            )
+
+    detail_df = pd.DataFrame(split_rows)
+    summary_df = (
+        detail_df.groupby("feature", as_index=False)
+        .agg(
+            mean_delta_mae=("delta_mae", "mean"),
+            std_delta_mae=("delta_mae", "std"),
+            repeats=("delta_mae", "size"),
+        )
+        .sort_values("mean_delta_mae", ascending=False)
+        .reset_index(drop=True)
+    )
+    summary_df["model"] = model_name
+    summary_df["importance_source"] = "permutation_holdout"
+    return summary_df, detail_df
+
+def save_permutation_importance_figure(summary_df: pd.DataFrame, filename: str) -> None:
+    set_paper_rcparams()
+    ordered = summary_df.sort_values("mean_delta_mae", ascending=True).reset_index(drop=True)
+    fig, ax = plt.subplots(figsize=(6.0, 3.8))
+    y_pos = np.arange(len(ordered))
+    bars = ax.barh(
+        y_pos,
+        ordered["mean_delta_mae"],
+        xerr=ordered["std_delta_mae"].fillna(0.0).to_numpy(),
+        color=get_fig2c_bar_colors(len(ordered)),
+        edgecolor="#2f3e46",
+        linewidth=0.5,
+        error_kw={"elinewidth": 0.8, "ecolor": "#2f3e46", "capsize": 2},
+    )
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(ordered["feature"])
+    ax.set_xlabel("Permutation importance (ΔMAE, mg/g)")
+    style_small_axis(ax)
+    x_upper = float(np.nanmax(ordered["mean_delta_mae"] + ordered["std_delta_mae"].fillna(0.0))) if len(ordered) else 1.0
+    ax.set_xlim(min(0.0, float(np.nanmin(ordered["mean_delta_mae"])) * 1.05), max(1.0, x_upper * 1.18))
+    for bar, value in zip(bars, ordered["mean_delta_mae"]):
+        xpos = bar.get_width()
+        ax.text(
+            xpos + max(ax.get_xlim()[1] * 0.01, 0.05),
+            bar.get_y() + bar.get_height() / 2.0,
+            f"{float(value):.1f}",
+            va="center",
+            ha="left",
+            fontsize=8,
+        )
+    fig.subplots_adjust(left=0.18, right=0.98, top=0.96, bottom=0.18)
+    fig.savefig(OUTPUT_DIR / filename, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
 def save_fig2_like(
     core_df: pd.DataFrame | None,
     fallback_df: pd.DataFrame,

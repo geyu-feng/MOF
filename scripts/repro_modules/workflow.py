@@ -172,6 +172,17 @@ def run_reproduction(
     save_fig2a_relationship(target_core_df, display_training_df, "fig2a_relationship.png")
     save_fig2c_feature_importance(feature_importance, "fig2c_feature_importance.png")
     feature_importance.to_csv(OUTPUT_DIR / "feature_importance.csv", index=False)
+    permutation_summary, permutation_detail = compute_repeated_permutation_importance(
+        display_training_raw,
+        best_model_name,
+        tuned_params[best_model_name],
+        n_splits=5,
+        test_size=0.1,
+        perm_repeats=20,
+    )
+    permutation_summary.to_csv(OUTPUT_DIR / "permutation_importance_summary.csv", index=False)
+    permutation_detail.to_csv(OUTPUT_DIR / "permutation_importance_detail.csv", index=False)
+    save_permutation_importance_figure(permutation_summary, "fig2c_permutation_importance.png")
 
     export_supplementary_text_sections()
     # Supplementary Fig. S1-S4
