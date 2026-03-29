@@ -229,10 +229,10 @@ def save_fig5_like(
         style_small_axis(ax)
         if feature == "sa":
             ax.ticklabel_format(axis="x", style="plain")
-        fig.colorbar(scatter, ax=ax, fraction=0.046, pad=0.02)
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.14, wspace=0.28, hspace=0.34)
+        fig.colorbar(scatter, ax=ax, fraction=0.04, pad=0.03)
+    fig.subplots_adjust(left=0.08, right=0.955, top=0.95, bottom=0.14, wspace=0.34, hspace=0.34)
     add_caption(fig, caption_text)
-    fig.savefig(OUTPUT_DIR / filename, dpi=300)
+    fig.savefig(OUTPUT_DIR / filename, dpi=300, bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
 
 def compute_feature_importance_table(pipe: Pipeline, training_df: pd.DataFrame, model_name: str) -> pd.DataFrame:
