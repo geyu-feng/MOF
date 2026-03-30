@@ -19,7 +19,10 @@ def isolate_fig3_only_outputs() -> None:
         "model_grid_search_best_per_model.csv",
         "model_metrics_paper_faithful.csv",
         "model_metrics_score_matched.csv",
+        "model_metrics_additional_models.csv",
         "fig3_fitting_effect.png",
+        "fig3_additional_model_fits.png",
+        "fig3_all_model_fits.png",
     }
     removable_suffixes = {".png", ".pdf", ".svg", ".csv", ".md", ".json", ".log"}
     for path in OUTPUT_DIR.iterdir():
@@ -143,6 +146,16 @@ def run_reproduction(
         "fig3_additional_model_fits.png",
         display_order=ADDITIONAL_MODEL_ORDER,
         caption_text="Fig. 3 (additional models). Fitting effect diagram of CatBoost, ExtraTree, HistGBDT, DecisionTree, Bagging, and LightGBM.",
+    )
+    combined_metrics = pd.concat([metric_frames[display_config], additional_metrics], ignore_index=True)
+    combined_predictions = {**prediction_frames[display_config], **additional_predictions}
+    save_fig3_like(
+        combined_predictions,
+        combined_metrics,
+        "fig3_all_model_fits.png",
+        display_order=[*MODEL_ORDER, *ADDITIONAL_MODEL_ORDER],
+        ncols=3,
+        caption_text="Fig. 3 (all models). Fitting effect diagram of twelve machine learning models.",
     )
 
     if fig3_only:
