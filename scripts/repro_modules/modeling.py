@@ -34,6 +34,16 @@ def get_fixed_model_params() -> dict[str, dict[str, object]]:
         "SVR": {"kernel": "rbf", "C": 30.0, "epsilon": 0.3, "gamma": "scale"},
     }
 
+def get_additional_model_params() -> dict[str, dict[str, object]]:
+    return {
+        "CatBoost": {"iterations": 500, "depth": 6, "learning_rate": 0.05, "l2_leaf_reg": 3.0},
+        "ExtraTree": {"max_depth": 16, "min_samples_leaf": 2, "min_samples_split": 4},
+        "HistGBDT": {"max_depth": 6, "learning_rate": 0.05, "max_iter": 300, "min_samples_leaf": 10},
+        "DecisionTree": {"max_depth": 10, "min_samples_leaf": 2, "min_samples_split": 4},
+        "Bagging": {"n_estimators": 300, "max_depth": 10, "min_samples_leaf": 2, "min_samples_split": 4},
+        "LightGBM": {"n_estimators": 400, "learning_rate": 0.03, "max_depth": 6, "num_leaves": 31, "min_child_samples": 10, "subsample": 0.9, "colsample_bytree": 0.9},
+    }
+
 
 def get_model_param_grids() -> dict[str, dict[str, list[object]]]:
     fixed_params = get_fixed_model_params()
@@ -95,6 +105,66 @@ def instantiate_model(model_name: str, params: dict[str, object] | None = None) 
         base = {"kernel": "rbf", "C": 30.0, "epsilon": 0.3, "gamma": "scale"}
         base.update(params)
         return SVR(**base)
+    if model_name == "CatBoost":
+        if CatBoostRegressor is None:
+            raise ImportError("CatBoost is not installed. Please install catboost to use CatBoostRegressor.")
+        base = {
+            "iterations": 500,
+            "depth": 6,
+            "learning_rate": 0.05,
+            "l2_leaf_reg": 3.0,
+            "loss_function": "RMSE",
+            "random_seed": 42,
+            "verbose": 0,
+            "allow_writing_files": False,
+        }
+        base.update(params)
+        return CatBoostRegressor(**base)
+    if model_name == "ExtraTree":
+        base = {"max_depth": 16, "min_samples_leaf": 2, "min_samples_split": 4, "random_state": 42}
+        base.update(params)
+        return ExtraTreeRegressor(**base)
+    if model_name == "HistGBDT":
+        base = {"max_depth": 6, "learning_rate": 0.05, "max_iter": 300, "min_samples_leaf": 10, "random_state": 42}
+        base.update(params)
+        return HistGradientBoostingRegressor(**base)
+    if model_name == "DecisionTree":
+        base = {"max_depth": 10, "min_samples_leaf": 2, "min_samples_split": 4, "random_state": 42}
+        base.update(params)
+        return DecisionTreeRegressor(**base)
+    if model_name == "Bagging":
+        base = {
+            "n_estimators": 300,
+            "random_state": 42,
+            "n_jobs": -1,
+            "estimator": DecisionTreeRegressor(max_depth=10, min_samples_leaf=2, min_samples_split=4, random_state=42),
+        }
+        custom = params.copy()
+        if "max_depth" in custom or "min_samples_leaf" in custom or "min_samples_split" in custom:
+            base["estimator"] = DecisionTreeRegressor(
+                max_depth=custom.pop("max_depth", 10),
+                min_samples_leaf=custom.pop("min_samples_leaf", 2),
+                min_samples_split=custom.pop("min_samples_split", 4),
+                random_state=42,
+            )
+        base.update(custom)
+        return BaggingRegressor(**base)
+    if model_name == "LightGBM":
+        if LGBMRegressor is None:
+            raise ImportError("LightGBM is not installed. Please install lightgbm to use LGBMRegressor.")
+        base = {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 6,
+            "num_leaves": 31,
+            "min_child_samples": 10,
+            "subsample": 0.9,
+            "colsample_bytree": 0.9,
+            "random_state": 42,
+            "verbosity": -1,
+        }
+        base.update(params)
+        return LGBMRegressor(**base)
     raise ValueError(f"Unknown model name: {model_name}")
 
 def build_models() -> dict[str, object]:
@@ -371,6 +441,50 @@ def fit_models_for_split(
         fitted[model_name] = pipe
     prepared_split = {"train": train_df, "test": test_df}
     return pd.DataFrame(metrics), predictions, fitted, prepared_split
+
+def fit_named_models_on_existing_split(
+    prepared_split: dict[str, pd.DataFrame],
+    config,
+    model_names: list[str],
+    model_params: dict[str, dict[str, object]] | None = None,
+) -> tuple[pd.DataFrame, dict[str, dict[str, pd.DataFrame]], dict[str, Pipeline]]:
+    train_df = prepared_split["train"].copy()
+    test_df = prepared_split["test"].copy()
+    y_train = train_df["q"].to_numpy()
+    y_test = test_df["q"].to_numpy()
+
+    metrics = []
+    predictions: dict[str, dict[str, pd.DataFrame]] = {}
+    fitted: dict[str, Pipeline] = {}
+    for model_name in model_names:
+        params = None if model_params is None else model_params.get(model_name)
+        model = instantiate_model(model_name, params)
+        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", model)])
+        pipe.fit(train_df[TRAINING_FEATURES], y_train)
+        train_pred = pipe.predict(train_df[TRAINING_FEATURES])
+        test_pred = pipe.predict(test_df[TRAINING_FEATURES])
+        metrics.append(
+            {
+                "config": config.name,
+                "model": model_name,
+                "mae": mean_absolute_error(y_test, test_pred),
+                "rmse": mean_squared_error(y_test, test_pred) ** 0.5,
+                "r2": r2_score(y_test, test_pred),
+                "train_rows": len(train_df),
+                "test_rows": len(test_df),
+                "train_groups": int(train_df["group_id"].nunique()),
+                "test_groups": int(test_df["group_id"].nunique()),
+                "descriptor_preset": config.descriptor_preset,
+                "mod_encoding": config.mod_encoding,
+                "split_mode": config.mode,
+            }
+        )
+        predictions[model_name] = {
+            "train": pd.DataFrame({"actual_q": y_train, "predicted_q": train_pred}),
+            "test": pd.DataFrame({"actual_q": y_test, "predicted_q": test_pred}),
+        }
+        fitted[model_name] = pipe
+    return pd.DataFrame(metrics), predictions, fitted
 
 def score_metric_frame(metrics: pd.DataFrame) -> float:
     avg_r2 = float(metrics["r2"].mean())

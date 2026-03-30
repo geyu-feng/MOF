@@ -123,6 +123,20 @@ def run_reproduction(
     display_config = pick_display_config(metric_frames)
     # Main-text Fig. 3
     save_fig3_like(prediction_frames[display_config], metric_frames[display_config], "fig3_fitting_effect.png")
+    additional_metrics, additional_predictions, _ = fit_named_models_on_existing_split(
+        prepared_splits[display_config],
+        configs[0] if display_config == "paper_faithful" else configs[1],
+        ADDITIONAL_MODEL_ORDER,
+        get_additional_model_params(),
+    )
+    additional_metrics.to_csv(OUTPUT_DIR / "model_metrics_additional_models.csv", index=False)
+    save_fig3_like(
+        additional_predictions,
+        additional_metrics,
+        "fig3_additional_model_fits.png",
+        display_order=ADDITIONAL_MODEL_ORDER,
+        caption_text="Fig. 3 (additional models). Fitting effect diagram of CatBoost, ExtraTree, HistGBDT, DecisionTree, Bagging, and LightGBM.",
+    )
 
     if fig3_only:
         return 0

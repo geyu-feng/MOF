@@ -27,7 +27,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from PIL import Image  # noqa: F401
 from scipy.stats import gaussian_kde
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor, HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LinearRegression
@@ -37,7 +37,18 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor, ExtraTreeRegressor
 from xgboost import XGBRegressor
+
+try:
+    from catboost import CatBoostRegressor
+except Exception:
+    CatBoostRegressor = None
+
+try:
+    from lightgbm import LGBMRegressor
+except Exception:
+    LGBMRegressor = None
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning, module="sklearn.impute._iterative")
 
@@ -253,6 +264,7 @@ SCREENING_MOD_STRATEGY = "training_distribution_marginalized"
 TARGET_CORE_METALS = ["Zn", "Cu", "Zr", "Cr", "Nd", "Sm", "Ni"]
 
 MODEL_ORDER = ["RF", "GBDT", "XGB", "LR", "KNN", "SVR"]
+ADDITIONAL_MODEL_ORDER = ["CatBoost", "ExtraTree", "HistGBDT", "DecisionTree", "Bagging", "LightGBM"]
 GROUP_AWARE_TUNING_GROUP_THRESHOLD = 20
 
 PAPER_FEATURE_LABELS = {

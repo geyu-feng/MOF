@@ -155,11 +155,18 @@ def style_fig2a_axis(ax, plot_df: pd.DataFrame) -> None:
         axis._axinfo["axisline"]["color"] = (0.0, 0.0, 0.0, 1.0)
         axis._axinfo["axisline"]["linewidth"] = 0.8
 
-def save_fig3_like(predictions: dict[str, dict[str, pd.DataFrame]], metrics: pd.DataFrame, filename: str) -> None:
-    # Main-text Fig. 3: six-model fitting/parity panels.
+def save_fig3_like(
+    predictions: dict[str, dict[str, pd.DataFrame]],
+    metrics: pd.DataFrame,
+    filename: str,
+    *,
+    display_order: list[str] | None = None,
+    caption_text: str = "Fig. 3. Fitting effect diagram of six machine learning models.",
+) -> None:
+    # Main-text Fig. 3 style fitting/parity panels.
     set_paper_rcparams()
     fig, axes = plt.subplots(2, 3, figsize=(7.1, 6.2))
-    display_order = ["RF", "GBDT", "XGB", "LR", "KNN", "SVR"]
+    display_order = ["RF", "GBDT", "XGB", "LR", "KNN", "SVR"] if display_order is None else list(display_order)
     letter_order = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"]
 
     for ax, model_name, letter in zip(axes.flat, display_order, letter_order):
@@ -182,7 +189,7 @@ def save_fig3_like(predictions: dict[str, dict[str, pd.DataFrame]], metrics: pd.
         ax.set_aspect("equal", adjustable="box")
 
     fig.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.14, wspace=0.28, hspace=0.32)
-    add_caption(fig, "Fig. 3. Fitting effect diagram of six machine learning models.")
+    add_caption(fig, caption_text)
     fig.savefig(OUTPUT_DIR / filename, dpi=300)
     plt.close(fig)
 
