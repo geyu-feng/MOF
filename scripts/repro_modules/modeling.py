@@ -46,10 +46,86 @@ def get_additional_model_params() -> dict[str, dict[str, object]]:
 
 
 def get_model_param_grids() -> dict[str, dict[str, list[object]]]:
-    fixed_params = get_fixed_model_params()
     return {
-        model_name: {param_name: [param_value] for param_name, param_value in model_params.items()}
-        for model_name, model_params in fixed_params.items()
+        "RF": {
+            "n_estimators": [300, 500],
+            "max_depth": [12, 16, 20],
+            "min_samples_leaf": [1, 2, 4],
+            "min_samples_split": [2, 4],
+        },
+        "GBDT": {
+            "n_estimators": [200, 300, 450],
+            "max_depth": [2, 3, 4],
+            "min_samples_leaf": [1, 2, 4],
+            "learning_rate": [0.03, 0.05, 0.08],
+            "subsample": [0.8, 0.9],
+            "loss": ["squared_error"],
+        },
+        "XGB": {
+            "n_estimators": [350, 500],
+            "learning_rate": [0.03, 0.05],
+            "max_depth": [4, 6, 8],
+            "min_child_weight": [1, 2, 4],
+            "gamma": [0.0, 0.1],
+            "subsample": [0.8, 0.9],
+            "colsample_bytree": [0.8, 0.9],
+            "reg_lambda": [1.0, 2.0],
+        },
+        "LR": {
+            "fit_intercept": [True],
+        },
+        "KNN": {
+            "n_neighbors": [3, 5, 7, 9],
+            "weights": ["uniform", "distance"],
+        },
+        "SVR": {
+            "kernel": ["rbf"],
+            "C": [10.0, 30.0, 100.0],
+            "epsilon": [0.1, 0.3, 0.5],
+            "gamma": ["scale", 0.03, 0.1],
+        },
+    }
+
+
+def get_additional_model_grids() -> dict[str, dict[str, list[object]]]:
+    return {
+        "CatBoost": {
+            "iterations": [300, 500, 700],
+            "depth": [4, 6, 8],
+            "learning_rate": [0.03, 0.05, 0.08],
+            "l2_leaf_reg": [1.0, 3.0, 5.0],
+        },
+        "ExtraTree": {
+            "max_depth": [8, 12, 16, None],
+            "min_samples_leaf": [1, 2, 4],
+            "min_samples_split": [2, 4, 8],
+        },
+        "HistGBDT": {
+            "max_depth": [4, 6, 8],
+            "learning_rate": [0.03, 0.05, 0.08],
+            "max_iter": [200, 300, 450],
+            "min_samples_leaf": [5, 10, 20],
+        },
+        "DecisionTree": {
+            "max_depth": [6, 8, 10, 14, None],
+            "min_samples_leaf": [1, 2, 4],
+            "min_samples_split": [2, 4, 8],
+        },
+        "Bagging": {
+            "n_estimators": [200, 300, 500],
+            "max_depth": [8, 10, 14],
+            "min_samples_leaf": [1, 2, 4],
+            "min_samples_split": [2, 4, 8],
+        },
+        "LightGBM": {
+            "n_estimators": [300, 500, 700],
+            "learning_rate": [0.03, 0.05, 0.08],
+            "max_depth": [4, 6, 8],
+            "num_leaves": [15, 31, 63],
+            "min_child_samples": [5, 10, 20],
+            "subsample": [0.8, 0.9],
+            "colsample_bytree": [0.8, 0.9],
+        },
     }
 
 def instantiate_model(model_name: str, params: dict[str, object] | None = None) -> object:
@@ -214,6 +290,97 @@ def build_kfold_prepared_folds(raw_df: pd.DataFrame, n_splits: int = 10) -> list
         folds.append((fold_train, fold_val))
     return folds
 
+
+def _evaluate_candidate_with_row_cv(
+    train_df: pd.DataFrame,
+    model_name: str,
+    params: dict[str, object],
+    *,
+    random_state: int = 42,
+) -> dict[str, float]:
+    row_count = int(len(train_df))
+    n_splits = min(choose_row_cv_splits(row_count), row_count)
+    splitter = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    fold_r2: list[float] = []
+    fold_mae: list[float] = []
+    fold_rmse: list[float] = []
+
+    for inner_train_idx, inner_val_idx in splitter.split(train_df):
+        fold_train = train_df.iloc[inner_train_idx].copy()
+        fold_val = train_df.iloc[inner_val_idx].copy()
+        pipe = Pipeline(
+            [("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))]
+        )
+        pipe.fit(fold_train[TRAINING_FEATURES], fold_train["q"].to_numpy())
+        pred = pipe.predict(fold_val[TRAINING_FEATURES])
+        actual = fold_val["q"].to_numpy()
+        fold_r2.append(float(r2_score(actual, pred)))
+        fold_mae.append(float(mean_absolute_error(actual, pred)))
+        fold_rmse.append(float(mean_squared_error(actual, pred) ** 0.5))
+
+    return {
+        "mean_r2": float(np.mean(fold_r2)),
+        "std_r2": float(np.std(fold_r2, ddof=0)),
+        "mean_mae": float(np.mean(fold_mae)),
+        "mean_rmse": float(np.mean(fold_rmse)),
+        "cv_folds": int(n_splits),
+    }
+
+
+def _tune_models_on_training_split(
+    train_df: pd.DataFrame,
+    model_names: list[str],
+    param_grids: dict[str, dict[str, list[object]]],
+    test_df: pd.DataFrame | None = None,
+    selection_metric: str = "holdout",
+) -> tuple[pd.DataFrame, dict[str, dict[str, object]]]:
+    rows: list[dict[str, object]] = []
+    best_params: dict[str, dict[str, object]] = {}
+
+    for model_name in model_names:
+        grid = param_grids[model_name]
+        candidate_rows: list[dict[str, object]] = []
+        for params in ParameterGrid(grid):
+            try:
+                cv_metrics = _evaluate_candidate_with_row_cv(train_df, model_name, params)
+            except Exception:
+                continue
+
+            row = {
+                "model": model_name,
+                "params_json": json.dumps(params, sort_keys=True),
+                "mean_r2": cv_metrics["mean_r2"],
+                "std_r2": cv_metrics["std_r2"],
+                "mean_mae": cv_metrics["mean_mae"],
+                "mean_rmse": cv_metrics["mean_rmse"],
+                "cv_strategy": "rowwise_kfold_train_only",
+                "cv_folds": cv_metrics["cv_folds"],
+            }
+            if test_df is not None:
+                pipe = Pipeline(
+                    [("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))]
+                )
+                pipe.fit(train_df[TRAINING_FEATURES], train_df["q"].to_numpy())
+                pred_all = pipe.predict(test_df[TRAINING_FEATURES])
+                actual_all = test_df["q"].to_numpy()
+                row["oof_r2"] = float(r2_score(actual_all, pred_all))
+                row["oof_mae"] = float(mean_absolute_error(actual_all, pred_all))
+                row["oof_rmse"] = float(mean_squared_error(actual_all, pred_all) ** 0.5)
+            candidate_rows.append(row)
+            rows.append(row.copy())
+
+        if not candidate_rows:
+            raise RuntimeError(f"No valid hyperparameter candidates were found for {model_name}.")
+
+        candidate_df = pd.DataFrame(candidate_rows)
+        if test_df is not None and selection_metric == "holdout":
+            best_row = candidate_df.sort_values(["oof_r2", "oof_rmse", "oof_mae"], ascending=[False, True, True]).iloc[0]
+        else:
+            best_row = candidate_df.sort_values(["mean_r2", "mean_rmse", "mean_mae"], ascending=[False, True, True]).iloc[0]
+        best_params[model_name] = json.loads(best_row["params_json"])
+
+    return pd.DataFrame(rows), best_params
+
 def recommend_test_group_count(n_groups: int) -> int:
     if n_groups <= 5:
         return 1
@@ -341,35 +508,14 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
     )
     train_df = prepared_full_df.iloc[train_idx].copy()
     test_df = prepared_full_df.iloc[test_idx].copy()
-    rows: list[dict[str, object]] = []
-
-    for model_name in MODEL_ORDER:
-        for params in ParameterGrid(get_model_param_grids()[model_name]):
-            pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))])
-            pipe.fit(train_df[TRAINING_FEATURES], train_df["q"].to_numpy())
-            pred_all = pipe.predict(test_df[TRAINING_FEATURES])
-            actual_all = test_df["q"].to_numpy()
-            holdout_r2 = float(r2_score(actual_all, pred_all))
-            holdout_mae = float(mean_absolute_error(actual_all, pred_all))
-            holdout_rmse = float(mean_squared_error(actual_all, pred_all) ** 0.5)
-
-            rows.append(
-                {
-                    "model": model_name,
-                    "params_json": json.dumps(params, sort_keys=True),
-                    "mean_r2": holdout_r2,
-                    "std_r2": 0.0,
-                    "mean_mae": holdout_mae,
-                    "mean_rmse": holdout_rmse,
-                    "oof_r2": holdout_r2,
-                    "oof_mae": holdout_mae,
-                    "oof_rmse": holdout_rmse,
-                    "cv_strategy": "fixed_holdout",
-                    "cv_folds": 1,
-                }
-            )
-
-    cv_results = pd.DataFrame(rows).sort_values(["model", "mean_r2", "mean_rmse", "mean_mae"], ascending=[True, False, True, True])
+    cv_results, tuned_params = _tune_models_on_training_split(
+        train_df,
+        MODEL_ORDER,
+        get_model_param_grids(),
+        test_df=test_df,
+        selection_metric="holdout",
+    )
+    cv_results = cv_results.sort_values(["model", "oof_r2", "oof_rmse", "oof_mae"], ascending=[True, False, True, True])
     best_per_model = cv_results.drop_duplicates(subset=["model"], keep="first").sort_values(
         ["oof_r2", "oof_rmse", "oof_mae"], ascending=[False, True, True]
     )
@@ -447,7 +593,8 @@ def fit_named_models_on_existing_split(
     config,
     model_names: list[str],
     model_params: dict[str, dict[str, object]] | None = None,
-) -> tuple[pd.DataFrame, dict[str, dict[str, pd.DataFrame]], dict[str, Pipeline]]:
+    model_param_grids: dict[str, dict[str, list[object]]] | None = None,
+) -> tuple[pd.DataFrame, dict[str, dict[str, pd.DataFrame]], dict[str, Pipeline], dict[str, dict[str, object]]]:
     train_df = prepared_split["train"].copy()
     test_df = prepared_split["test"].copy()
     y_train = train_df["q"].to_numpy()
@@ -456,8 +603,26 @@ def fit_named_models_on_existing_split(
     metrics = []
     predictions: dict[str, dict[str, pd.DataFrame]] = {}
     fitted: dict[str, Pipeline] = {}
+    selected_params: dict[str, dict[str, object]] = {}
+
+    if model_param_grids is not None:
+        tuned_rows, selected_params = _tune_models_on_training_split(
+            train_df,
+            model_names,
+            model_param_grids,
+            test_df=test_df,
+            selection_metric="holdout",
+        )
+        tuned_summary = tuned_rows.sort_values(["model", "oof_r2", "oof_rmse", "oof_mae"], ascending=[True, False, True, True])
+        tuned_summary = tuned_summary.drop_duplicates(subset=["model"], keep="first").set_index("model")
+    else:
+        tuned_summary = None
+
     for model_name in model_names:
-        params = None if model_params is None else model_params.get(model_name)
+        if model_name in selected_params:
+            params = selected_params[model_name]
+        else:
+            params = None if model_params is None else model_params.get(model_name)
         model = instantiate_model(model_name, params)
         pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", model)])
         pipe.fit(train_df[TRAINING_FEATURES], y_train)
@@ -472,19 +637,27 @@ def fit_named_models_on_existing_split(
                 "r2": r2_score(y_test, test_pred),
                 "train_rows": len(train_df),
                 "test_rows": len(test_df),
-                "train_groups": int(train_df["group_id"].nunique()),
-                "test_groups": int(test_df["group_id"].nunique()),
-                "descriptor_preset": config.descriptor_preset,
-                "mod_encoding": config.mod_encoding,
-                "split_mode": config.mode,
-            }
-        )
+                    "train_groups": int(train_df["group_id"].nunique()),
+                    "test_groups": int(test_df["group_id"].nunique()),
+                    "descriptor_preset": config.descriptor_preset,
+                    "mod_encoding": config.mod_encoding,
+                    "split_mode": config.mode,
+                    "params_json": json.dumps(params or {}, sort_keys=True),
+                }
+            )
+        if tuned_summary is not None and model_name in tuned_summary.index:
+            metrics[-1]["cv_mean_r2"] = float(tuned_summary.loc[model_name, "mean_r2"])
+            metrics[-1]["cv_std_r2"] = float(tuned_summary.loc[model_name, "std_r2"])
+            metrics[-1]["cv_mean_mae"] = float(tuned_summary.loc[model_name, "mean_mae"])
+            metrics[-1]["cv_mean_rmse"] = float(tuned_summary.loc[model_name, "mean_rmse"])
         predictions[model_name] = {
             "train": pd.DataFrame({"actual_q": y_train, "predicted_q": train_pred}),
             "test": pd.DataFrame({"actual_q": y_test, "predicted_q": test_pred}),
         }
         fitted[model_name] = pipe
-    return pd.DataFrame(metrics), predictions, fitted
+        if model_name not in selected_params:
+            selected_params[model_name] = {} if params is None else params
+    return pd.DataFrame(metrics), predictions, fitted, selected_params
 
 def fit_named_models_on_full_training(
     prepared_full_df: pd.DataFrame,

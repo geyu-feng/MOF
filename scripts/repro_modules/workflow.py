@@ -102,12 +102,6 @@ def run_reproduction(
         display_basis_config.group_recipe,
     )
     cv_results_df, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
-    additional_full_pipes = fit_named_models_on_full_training(
-        display_training_df,
-        ADDITIONAL_MODEL_ORDER,
-        get_additional_model_params(),
-    )
-    all_full_pipes = {**tuned_full_pipes, **additional_full_pipes}
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
     best_model_name = str(cv_best_df.iloc[0]["model"])
     if not fig3_only:
@@ -133,13 +127,19 @@ def run_reproduction(
     display_config = pick_display_config(metric_frames)
     # Main-text Fig. 3
     save_fig3_like(prediction_frames[display_config], metric_frames[display_config], "fig3_fitting_effect.png")
-    additional_metrics, additional_predictions, _ = fit_named_models_on_existing_split(
+    additional_metrics, additional_predictions, _, additional_tuned_params = fit_named_models_on_existing_split(
         prepared_splits[display_config],
         configs[0] if display_config == "paper_faithful" else configs[1],
         ADDITIONAL_MODEL_ORDER,
-        get_additional_model_params(),
+        model_param_grids=get_additional_model_grids(),
     )
     additional_metrics.to_csv(OUTPUT_DIR / "model_metrics_additional_models.csv", index=False)
+    additional_full_pipes = fit_named_models_on_full_training(
+        display_training_df,
+        ADDITIONAL_MODEL_ORDER,
+        additional_tuned_params,
+    )
+    all_full_pipes = {**tuned_full_pipes, **additional_full_pipes}
     save_fig3_like(
         additional_predictions,
         additional_metrics,

@@ -41,7 +41,7 @@ class ReproModuleTests(unittest.TestCase):
             }
         )
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "requires at least 6 rows"):
+            with self.assertRaisesRegex(ValueError, "requires at least .* rows"):
                 _run_model_grid_search_cv(frame, Path(temp_dir))
 
     def test_prepare_model_table_uses_stratified_and_positive_imputation(self) -> None:
