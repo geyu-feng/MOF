@@ -162,6 +162,7 @@ def save_fig3_like(
     *,
     display_order: list[str] | None = None,
     ncols: int = 3,
+    figsize: tuple[float, float] | None = None,
     caption_text: str = "Fig. 3. Fitting effect diagram of six machine learning models.",
 ) -> None:
     # Main-text Fig. 3 style fitting/parity panels.
@@ -171,7 +172,9 @@ def save_fig3_like(
     n_models = len(display_order)
     ncols = max(1, int(ncols))
     nrows = max(1, int(np.ceil(n_models / ncols)))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(7.1, 3.05 * nrows))
+    if figsize is None:
+        figsize = (7.1, 3.05 * nrows)
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
     axes = np.atleast_1d(axes).ravel()
     letter_order = [f"({chr(97 + idx)})" for idx in range(n_models)]
 

@@ -154,7 +154,8 @@ def run_reproduction(
         combined_metrics,
         "fig3_all_model_fits.png",
         display_order=[*MODEL_ORDER, *ADDITIONAL_MODEL_ORDER],
-        ncols=3,
+        ncols=6,
+        figsize=(14.2, 6.2),
         caption_text="Fig. 3 (all models). Fitting effect diagram of twelve machine learning models.",
     )
 
