@@ -41,9 +41,10 @@ def render_all_model_fig5s(
     tuned_full_pipes: dict[str, Pipeline],
     display_training_df: pd.DataFrame,
 ) -> None:
-    """Render one Fig. 5 style structure-performance plot for each of the six trained models."""
+    """Render one Fig. 5 style structure-performance plot for each available trained model."""
     screening_mod_weights = get_screening_mod_weights(display_training_df)
-    for model_name in MODEL_ORDER:
+    ordered_models = [*MODEL_ORDER, *ADDITIONAL_MODEL_ORDER]
+    for model_name in ordered_models:
         if model_name not in tuned_full_pipes:
             continue
         first_adsorption_df = make_first_adsorption_dataset(
@@ -98,6 +99,12 @@ def run_reproduction(
         display_basis_config.group_recipe,
     )
     cv_results_df, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
+    additional_full_pipes = fit_named_models_on_full_training(
+        display_training_df,
+        ADDITIONAL_MODEL_ORDER,
+        get_additional_model_params(),
+    )
+    all_full_pipes = {**tuned_full_pipes, **additional_full_pipes}
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
     best_model_name = str(cv_best_df.iloc[0]["model"])
     if not fig3_only:
@@ -215,7 +222,7 @@ def run_reproduction(
     )
     save_fig5_like(first_adsorption_df, "fig5_structure_relationships.png")
     if fig5_all_models:
-        render_all_model_fig5s(target_core_df, tuned_full_pipes, display_training_df)
+        render_all_model_fig5s(target_core_df, all_full_pipes, display_training_df)
 
     if not skip_supplementary:
         # Supplementary Fig. S5 and Fig. S6

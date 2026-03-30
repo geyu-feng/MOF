@@ -486,6 +486,21 @@ def fit_named_models_on_existing_split(
         fitted[model_name] = pipe
     return pd.DataFrame(metrics), predictions, fitted
 
+def fit_named_models_on_full_training(
+    prepared_full_df: pd.DataFrame,
+    model_names: list[str],
+    model_params: dict[str, dict[str, object]] | None = None,
+) -> dict[str, Pipeline]:
+    y = prepared_full_df["q"].to_numpy()
+    fitted: dict[str, Pipeline] = {}
+    for model_name in model_names:
+        params = None if model_params is None else model_params.get(model_name)
+        model = instantiate_model(model_name, params)
+        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", model)])
+        pipe.fit(prepared_full_df[TRAINING_FEATURES], y)
+        fitted[model_name] = pipe
+    return fitted
+
 def score_metric_frame(metrics: pd.DataFrame) -> float:
     avg_r2 = float(metrics["r2"].mean())
     avg_rmse = float(metrics["rmse"].mean())
