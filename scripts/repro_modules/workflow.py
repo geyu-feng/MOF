@@ -39,6 +39,19 @@ def pick_display_config(metric_frames: dict[str, object]) -> str:
     return min(scored, key=scored.get)
 
 
+def pick_shap_tree_model(best_model_name: str, ranked_models: pd.DataFrame) -> str:
+    """Use the current best model when it is tree-based, otherwise fall back to the
+    highest-ranked tree model so TreeExplainer stays valid."""
+    tree_models = {"RF", "GBDT", "XGB"}
+    if best_model_name in tree_models:
+        return best_model_name
+    ranked_names = ranked_models["model"].tolist() if "model" in ranked_models.columns else []
+    for model_name in ranked_names:
+        if model_name in tree_models:
+            return model_name
+    return "XGB"
+
+
 def render_all_model_fig5s(
     target_core_df: pd.DataFrame,
     tuned_full_pipes: dict[str, Pipeline],
@@ -249,7 +262,15 @@ def run_reproduction(
     if not skip_supplementary:
         # Supplementary Fig. S5 and Fig. S6
         test_df = prepared_splits[display_config]["test"].copy()
-        save_combined_supplementary_figures(split_pipes[display_config], test_df, "figS5_beeswarm.png", "figS6_waterfall.png")
+        shap_model_name = pick_shap_tree_model(best_model_name, cv_best_df)
+        save_combined_supplementary_figures(
+            tuned_full_pipes[shap_model_name],
+            display_training_df,
+            split_pipes[display_config][shap_model_name],
+            test_df,
+            "figS5_beeswarm.png",
+            "figS6_waterfall.png",
+        )
 
     write_summary(
         metric_frames,

@@ -629,11 +629,19 @@ def save_single_waterfall(pipe: Pipeline, sample_df: pd.DataFrame, sample_index:
     plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
-def save_combined_supplementary_figures(pipes: dict[str, Pipeline], test_df: pd.DataFrame, filename_s5: str, filename_s6: str) -> None:
-    # Convenience wrapper used by the main workflow to emit Fig. S5 and Fig. S6 together.
-    save_single_shap_beeswarm(pipes["RF"], test_df, OUTPUT_DIR / filename_s5)
-    sample_index = int(np.argmax(test_df["q"].to_numpy()))
-    save_single_waterfall(pipes["XGB"], test_df, sample_index, OUTPUT_DIR / filename_s6)
+def save_combined_supplementary_figures(
+    beeswarm_pipe: Pipeline,
+    beeswarm_df: pd.DataFrame,
+    waterfall_pipe: Pipeline,
+    waterfall_df: pd.DataFrame,
+    filename_s5: str,
+    filename_s6: str,
+) -> None:
+    # Supplementary Fig. S5 uses the current best tree model on the full training set
+    # so the beeswarm reflects the main model logic and has enough points to be readable.
+    save_single_shap_beeswarm(beeswarm_pipe, beeswarm_df, OUTPUT_DIR / filename_s5)
+    sample_index = int(np.argmax(waterfall_df["q"].to_numpy()))
+    save_single_waterfall(waterfall_pipe, waterfall_df, sample_index, OUTPUT_DIR / filename_s6)
 
 def _load_supplementary_paragraphs(root: Path) -> list[str]:
     docx_path = next(root.glob("*mmc1.docx"))
