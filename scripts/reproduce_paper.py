@@ -40,6 +40,11 @@ def main() -> int:
     parser.add_argument('--skip-supplementary', action='store_true', help='Skip SHAP supplementary figure generation.')
     parser.add_argument('--fig3-only', action='store_true', help='Run only the model-selection and Fig. 3 evaluation path.')
     parser.add_argument(
+        '--enable-tuning',
+        action='store_true',
+        help='Enable expensive hyperparameter search for the base and additional model sets.',
+    )
+    parser.add_argument(
         '--single-fig5-only',
         action='store_true',
         help='Disable the default all-model Fig. 5 exports and keep only the main Fig. 5.',
@@ -49,6 +54,7 @@ def main() -> int:
         skip_supplementary=args.skip_supplementary,
         fig3_only=args.fig3_only,
         fig5_all_models=not args.single_fig5_only,
+        enable_tuning=args.enable_tuning,
     )
     update_readme()
     return code

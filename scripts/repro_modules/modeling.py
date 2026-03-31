@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import math
+import hashlib
 from itertools import combinations
 
+import joblib
 from scripts.repro_modules.common import *
 from sklearn.model_selection import train_test_split
 
 # --- core.py ---
+
+MODEL_CACHE_DIR = OUTPUT_DIR / "_model_cache"
+TUNING_CACHE_DIR = OUTPUT_DIR / "_tuning_cache"
 
 def get_fixed_model_params() -> dict[str, dict[str, object]]:
     return {
@@ -268,6 +273,112 @@ def choose_row_cv_splits(row_count: int) -> int:
     return max(2, min(5, int(row_count)))
 
 
+def _stable_json(data: object) -> str:
+    return json.dumps(data, sort_keys=True, ensure_ascii=True)
+
+
+def _dataframe_fingerprint(frame: pd.DataFrame) -> str:
+    normalized = frame.copy()
+    normalized = normalized.fillna("<NA>").astype(str)
+    row_hash = pd.util.hash_pandas_object(normalized, index=True).to_numpy()
+    return hashlib.sha1(row_hash.tobytes()).hexdigest()
+
+
+def _build_full_model_cache_path(
+    prepared_full_df: pd.DataFrame,
+    model_names: list[str],
+    model_params: dict[str, dict[str, object]],
+    cache_label: str,
+) -> Path:
+    MODEL_CACHE_DIR.mkdir(exist_ok=True)
+    payload = {
+        "label": cache_label,
+        "models": list(model_names),
+        "params": {name: model_params.get(name, {}) for name in model_names},
+        "training_fingerprint": _dataframe_fingerprint(prepared_full_df[TRAINING_FEATURES + ["q"]]),
+        "modeling_source_sha1": hashlib.sha1((ROOT / "scripts" / "repro_modules" / "modeling.py").read_bytes()).hexdigest(),
+        "common_source_sha1": hashlib.sha1((ROOT / "scripts" / "repro_modules" / "common.py").read_bytes()).hexdigest(),
+    }
+    digest = hashlib.sha1(_stable_json(payload).encode("utf-8")).hexdigest()[:12]
+    return MODEL_CACHE_DIR / f"{cache_label}_{digest}.joblib"
+
+
+def _build_tuning_cache_path(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    model_names: list[str],
+    param_grids: dict[str, dict[str, list[object]]],
+    *,
+    cache_label: str,
+    selection_metric: str,
+) -> Path:
+    TUNING_CACHE_DIR.mkdir(exist_ok=True)
+    payload = {
+        "label": cache_label,
+        "models": list(model_names),
+        "param_grids": {name: param_grids[name] for name in model_names},
+        "selection_metric": selection_metric,
+        "train_fingerprint": _dataframe_fingerprint(train_df[TRAINING_FEATURES + ["q"]]),
+        "test_fingerprint": _dataframe_fingerprint(test_df[TRAINING_FEATURES + ["q"]]),
+        "modeling_source_sha1": hashlib.sha1((ROOT / "scripts" / "repro_modules" / "modeling.py").read_bytes()).hexdigest(),
+        "common_source_sha1": hashlib.sha1((ROOT / "scripts" / "repro_modules" / "common.py").read_bytes()).hexdigest(),
+    }
+    digest = hashlib.sha1(_stable_json(payload).encode("utf-8")).hexdigest()[:12]
+    return TUNING_CACHE_DIR / f"{cache_label}_{digest}.joblib"
+
+
+def _load_tuning_cache(path: Path) -> tuple[pd.DataFrame, dict[str, dict[str, object]]] | None:
+    if not path.exists():
+        return None
+    cached = joblib.load(path)
+    if not isinstance(cached, dict):
+        return None
+    rows = cached.get("cv_results")
+    params = cached.get("best_params")
+    if not isinstance(rows, pd.DataFrame) or not isinstance(params, dict):
+        return None
+    return rows, params
+
+
+def _save_tuning_cache(path: Path, cv_results: pd.DataFrame, best_params: dict[str, dict[str, object]]) -> None:
+    joblib.dump({"cv_results": cv_results, "best_params": best_params}, path)
+
+
+def _evaluate_fixed_models_on_holdout(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    model_names: list[str],
+    model_params: dict[str, dict[str, object]],
+    *,
+    cv_strategy: str,
+) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for model_name in model_names:
+        params = model_params.get(model_name, {})
+        pipe = Pipeline(
+            [("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", instantiate_model(model_name, params))]
+        )
+        pipe.fit(train_df[TRAINING_FEATURES], train_df["q"].to_numpy())
+        pred_all = pipe.predict(test_df[TRAINING_FEATURES])
+        actual_all = test_df["q"].to_numpy()
+        rows.append(
+            {
+                "model": model_name,
+                "params_json": json.dumps(params, sort_keys=True),
+                "mean_r2": float("nan"),
+                "std_r2": float("nan"),
+                "mean_mae": float("nan"),
+                "mean_rmse": float("nan"),
+                "cv_strategy": cv_strategy,
+                "cv_folds": 1,
+                "oof_r2": float(r2_score(actual_all, pred_all)),
+                "oof_mae": float(mean_absolute_error(actual_all, pred_all)),
+                "oof_rmse": float(mean_squared_error(actual_all, pred_all) ** 0.5),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def validate_holdout_train_size(frame: pd.DataFrame, context: str, test_size: float = 0.1) -> int:
     row_count = int(len(frame))
     min_train_rows = max(int(get_fixed_model_params()["KNN"]["n_neighbors"]), 2)
@@ -497,7 +608,12 @@ def select_balanced_test_groups(raw_df: pd.DataFrame, test_group_count: int, ran
         raise RuntimeError("Unable to select a balanced grouped test split.")
     return set(int(x) for x in best_combo)
 
-def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
+def _run_model_grid_search_cv(
+    raw_df: pd.DataFrame,
+    output_dir,
+    *,
+    enable_tuning: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
     prepared_full_df = prepare_model_table(raw_df, fit_df=raw_df)
     validate_holdout_train_size(prepared_full_df, "Model selection")
     train_idx, test_idx = train_test_split(
@@ -508,26 +624,51 @@ def _run_model_grid_search_cv(raw_df: pd.DataFrame, output_dir) -> tuple[pd.Data
     )
     train_df = prepared_full_df.iloc[train_idx].copy()
     test_df = prepared_full_df.iloc[test_idx].copy()
-    cv_results, tuned_params = _tune_models_on_training_split(
-        train_df,
-        MODEL_ORDER,
-        get_model_param_grids(),
-        test_df=test_df,
-        selection_metric="holdout",
-    )
+
+    if enable_tuning:
+        param_grids = get_model_param_grids()
+        tuning_cache_path = _build_tuning_cache_path(
+            train_df,
+            test_df,
+            MODEL_ORDER,
+            param_grids,
+            cache_label="base_model_search",
+            selection_metric="holdout",
+        )
+        cached = _load_tuning_cache(tuning_cache_path)
+        if cached is None:
+            cv_results, tuned_params = _tune_models_on_training_split(
+                train_df,
+                MODEL_ORDER,
+                param_grids,
+                test_df=test_df,
+                selection_metric="holdout",
+            )
+            _save_tuning_cache(tuning_cache_path, cv_results, tuned_params)
+        else:
+            cv_results, tuned_params = cached
+    else:
+        tuned_params = get_fixed_model_params()
+        cv_results = _evaluate_fixed_models_on_holdout(
+            train_df,
+            test_df,
+            MODEL_ORDER,
+            tuned_params,
+            cv_strategy="fixed_holdout_no_tuning",
+        )
+
     cv_results = cv_results.sort_values(["model", "oof_r2", "oof_rmse", "oof_mae"], ascending=[True, False, True, True])
     best_per_model = cv_results.drop_duplicates(subset=["model"], keep="first").sort_values(
         ["oof_r2", "oof_rmse", "oof_mae"], ascending=[False, True, True]
     )
     cv_results.to_csv(output_dir / "model_grid_search_cv.csv", index=False)
     best_per_model.to_csv(output_dir / "model_grid_search_best_per_model.csv", index=False)
-    fitted_best_models: dict[str, Pipeline] = {}
-    y = prepared_full_df["q"].to_numpy()
-    for row in best_per_model.itertuples(index=False):
-        params = json.loads(row.params_json)
-        pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, row.model)), ("model", instantiate_model(row.model, params))])
-        pipe.fit(prepared_full_df[TRAINING_FEATURES], y)
-        fitted_best_models[row.model] = pipe
+    fitted_best_models = fit_named_models_on_full_training(
+        prepared_full_df,
+        MODEL_ORDER,
+        tuned_params,
+        cache_label="base_models",
+    )
     return cv_results, best_per_model, fitted_best_models, prepared_full_df
 
 def make_split(df: pd.DataFrame, config) -> SplitBundle:
@@ -594,6 +735,9 @@ def fit_named_models_on_existing_split(
     model_names: list[str],
     model_params: dict[str, dict[str, object]] | None = None,
     model_param_grids: dict[str, dict[str, list[object]]] | None = None,
+    *,
+    enable_tuning: bool = False,
+    tuning_cache_label: str = "named_model_search",
 ) -> tuple[pd.DataFrame, dict[str, dict[str, pd.DataFrame]], dict[str, Pipeline], dict[str, dict[str, object]]]:
     train_df = prepared_split["train"].copy()
     test_df = prepared_split["test"].copy()
@@ -605,14 +749,27 @@ def fit_named_models_on_existing_split(
     fitted: dict[str, Pipeline] = {}
     selected_params: dict[str, dict[str, object]] = {}
 
-    if model_param_grids is not None:
-        tuned_rows, selected_params = _tune_models_on_training_split(
+    if model_param_grids is not None and enable_tuning:
+        tuning_cache_path = _build_tuning_cache_path(
             train_df,
+            test_df,
             model_names,
             model_param_grids,
-            test_df=test_df,
+            cache_label=tuning_cache_label,
             selection_metric="holdout",
         )
+        cached = _load_tuning_cache(tuning_cache_path)
+        if cached is None:
+            tuned_rows, selected_params = _tune_models_on_training_split(
+                train_df,
+                model_names,
+                model_param_grids,
+                test_df=test_df,
+                selection_metric="holdout",
+            )
+            _save_tuning_cache(tuning_cache_path, tuned_rows, selected_params)
+        else:
+            tuned_rows, selected_params = cached
         tuned_summary = tuned_rows.sort_values(["model", "oof_r2", "oof_rmse", "oof_mae"], ascending=[True, False, True, True])
         tuned_summary = tuned_summary.drop_duplicates(subset=["model"], keep="first").set_index("model")
     else:
@@ -623,6 +780,7 @@ def fit_named_models_on_existing_split(
             params = selected_params[model_name]
         else:
             params = None if model_params is None else model_params.get(model_name)
+        selected_params[model_name] = {} if params is None else dict(params)
         model = instantiate_model(model_name, params)
         pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", model)])
         pipe.fit(train_df[TRAINING_FEATURES], y_train)
@@ -663,8 +821,17 @@ def fit_named_models_on_full_training(
     prepared_full_df: pd.DataFrame,
     model_names: list[str],
     model_params: dict[str, dict[str, object]] | None = None,
+    *,
+    cache_label: str = "named_models",
 ) -> dict[str, Pipeline]:
     y = prepared_full_df["q"].to_numpy()
+    resolved_params = {} if model_params is None else {name: model_params.get(name, {}) for name in model_names}
+    cache_path = _build_full_model_cache_path(prepared_full_df, model_names, resolved_params, cache_label)
+    if cache_path.exists():
+        cached = joblib.load(cache_path)
+        if isinstance(cached, dict) and all(name in cached for name in model_names):
+            return cached
+
     fitted: dict[str, Pipeline] = {}
     for model_name in model_names:
         params = None if model_params is None else model_params.get(model_name)
@@ -672,6 +839,7 @@ def fit_named_models_on_full_training(
         pipe = Pipeline([("prep", build_preprocessor(TRAINING_FEATURES, model_name)), ("model", model)])
         pipe.fit(prepared_full_df[TRAINING_FEATURES], y)
         fitted[model_name] = pipe
+    joblib.dump(fitted, cache_path)
     return fitted
 
 def score_metric_frame(metrics: pd.DataFrame) -> float:

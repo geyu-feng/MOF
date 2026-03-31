@@ -67,6 +67,7 @@ def run_reproduction(
     skip_supplementary: bool = False,
     fig3_only: bool = False,
     fig5_all_models: bool = True,
+    enable_tuning: bool = False,
 ) -> int:
     ensure_output_dir()
     if fig3_only:
@@ -101,7 +102,10 @@ def run_reproduction(
         display_basis_config.mod_encoding,
         display_basis_config.group_recipe,
     )
-    cv_results_df, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(display_training_raw)
+    cv_results_df, cv_best_df, tuned_full_pipes, display_training_df = run_model_grid_search_cv(
+        display_training_raw,
+        enable_tuning=enable_tuning,
+    )
     tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
     best_model_name = str(cv_best_df.iloc[0]["model"])
     if not fig3_only:
@@ -131,13 +135,17 @@ def run_reproduction(
         prepared_splits[display_config],
         configs[0] if display_config == "paper_faithful" else configs[1],
         ADDITIONAL_MODEL_ORDER,
+        model_params=get_additional_model_params(),
         model_param_grids=get_additional_model_grids(),
+        enable_tuning=enable_tuning,
+        tuning_cache_label="additional_model_search",
     )
     additional_metrics.to_csv(OUTPUT_DIR / "model_metrics_additional_models.csv", index=False)
     additional_full_pipes = fit_named_models_on_full_training(
         display_training_df,
         ADDITIONAL_MODEL_ORDER,
         additional_tuned_params,
+        cache_label="additional_models",
     )
     all_full_pipes = {**tuned_full_pipes, **additional_full_pipes}
     save_fig3_like(
@@ -254,8 +262,12 @@ def run_reproduction(
     return 0
 
 
-def run_model_grid_search_cv(raw_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
-    return _run_model_grid_search_cv(raw_df, OUTPUT_DIR)
+def run_model_grid_search_cv(
+    raw_df: pd.DataFrame,
+    *,
+    enable_tuning: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Pipeline], pd.DataFrame]:
+    return _run_model_grid_search_cv(raw_df, OUTPUT_DIR, enable_tuning=enable_tuning)
 
 
 def load_supplementary_paragraphs() -> list[str]:
