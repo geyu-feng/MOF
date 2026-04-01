@@ -67,11 +67,11 @@
       "ylabel": "AD",
       "xlim": [
         0.0,
-        600.0
+        300.0
       ],
       "ylim": [
         0.0,
-        1500.0
+        1000.0
       ],
       "x_points": 40,
       "y_points": 36,
@@ -128,7 +128,8 @@
         12.0
       ],
       "n_points": 80,
-      "grid_mode": "quantile",
+      "grid_mode": "observed",
+      "discrete_min_count": 3,
       "max_display_points": 9,
       "x_ticks": [
         2.5,

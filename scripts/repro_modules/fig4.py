@@ -541,6 +541,8 @@ def apply_axis_ticks(ax: plt.Axes, panel_cfg: dict[str, Any], axis: str) -> None
     if key_ticks in panel_cfg:
         if axis == "x":
             ax.set_xticks(panel_cfg[key_ticks])
+            if str(panel_cfg.get("x_scale", "")).lower() == "log":
+                ax.set_xticklabels([str(int(t)) if float(t).is_integer() else str(t) for t in panel_cfg[key_ticks]])
         else:
             ax.set_yticks(panel_cfg[key_ticks])
     elif key_locator in panel_cfg:
@@ -588,7 +590,25 @@ def infer_y_limits(curve: np.ndarray, panel_cfg: dict[str, Any]) -> tuple[float,
     padding = max((y_max - y_min) * float(panel_cfg["y_padding_fraction"]), float(panel_cfg["y_min_pad"]))
     return y_min - padding * 0.35, y_max + padding * 0.15
 
-def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
+def infer_shared_y_limits(panels: list[OneDPanelData], panel_cfgs: list[dict[str, Any]]) -> tuple[float, float]:
+    y_min = min(float(np.min(panel.y)) for panel in panels)
+    y_max = max(float(np.max(panel.y)) for panel in panels)
+    pad_candidates = []
+    for panel, cfg in zip(panels, panel_cfgs):
+        local_span = float(np.max(panel.y) - np.min(panel.y))
+        pad_candidates.append(max(local_span * float(cfg["y_padding_fraction"]), float(cfg["y_min_pad"])))
+    padding = max(pad_candidates) if pad_candidates else 1.0
+    return y_min - padding * 0.35, y_max + padding * 0.15
+
+def plot_one_d_panel(
+    ax: plt.Axes,
+    panel: OneDPanelData,
+    panel_cfg: dict[str, Any],
+    plot_cfg: dict[str, Any],
+    letter: str,
+    *,
+    y_limits: tuple[float, float] | None = None,
+) -> None:
     # Draw unsmoothed polylines over representative PDP anchors; this keeps the
     # empirical segmented feel without the visual artifacts caused by mid-step
     # transitions on highly irregular grids.
@@ -596,7 +616,7 @@ def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, An
     ax.set_xlim(float(np.min(panel.x)), float(np.max(panel.x)))
     if "x_scale" in panel_cfg:
         ax.set_xscale(panel_cfg["x_scale"])
-    ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
+    ax.set_ylim(*(y_limits or infer_y_limits(panel.y, panel_cfg)))
     ax.set_xlabel(panel_cfg["xlabel"])
     ax.set_ylabel(panel_cfg["ylabel"])
     ax.set_title(letter, pad=2)
@@ -609,12 +629,16 @@ def plot_fig4(bundle: Fig4DataBundle, config: dict[str, Any], destination: Path)
     set_paper_rcparams()
     plot_cfg = config["plot"]
     fig, axes = plt.subplots(2, 3, figsize=tuple(plot_cfg["figure_size"]))
+    shared_y_limits = infer_shared_y_limits(
+        [bundle.one_d["ci"], bundle.one_d["ad"], bundle.one_d["time"], bundle.one_d["ph"], bundle.one_d["temp"]],
+        [config["panels"]["ci"], config["panels"]["ad"], config["panels"]["time"], config["panels"]["ph"], config["panels"]["temp"]],
+    )
     plot_two_d_panel(axes[0, 0], bundle.two_d, config["panels"]["ci_ad"], plot_cfg, plot_cfg["panel_letters"][0])
-    plot_one_d_panel(axes[0, 1], bundle.one_d["ci"], config["panels"]["ci"], plot_cfg, plot_cfg["panel_letters"][1])
-    plot_one_d_panel(axes[0, 2], bundle.one_d["ad"], config["panels"]["ad"], plot_cfg, plot_cfg["panel_letters"][2])
-    plot_one_d_panel(axes[1, 0], bundle.one_d["time"], config["panels"]["time"], plot_cfg, plot_cfg["panel_letters"][3])
-    plot_one_d_panel(axes[1, 1], bundle.one_d["ph"], config["panels"]["ph"], plot_cfg, plot_cfg["panel_letters"][4])
-    plot_one_d_panel(axes[1, 2], bundle.one_d["temp"], config["panels"]["temp"], plot_cfg, plot_cfg["panel_letters"][5])
+    plot_one_d_panel(axes[0, 1], bundle.one_d["ci"], config["panels"]["ci"], plot_cfg, plot_cfg["panel_letters"][1], y_limits=shared_y_limits)
+    plot_one_d_panel(axes[0, 2], bundle.one_d["ad"], config["panels"]["ad"], plot_cfg, plot_cfg["panel_letters"][2], y_limits=shared_y_limits)
+    plot_one_d_panel(axes[1, 0], bundle.one_d["time"], config["panels"]["time"], plot_cfg, plot_cfg["panel_letters"][3], y_limits=shared_y_limits)
+    plot_one_d_panel(axes[1, 1], bundle.one_d["ph"], config["panels"]["ph"], plot_cfg, plot_cfg["panel_letters"][4], y_limits=shared_y_limits)
+    plot_one_d_panel(axes[1, 2], bundle.one_d["temp"], config["panels"]["temp"], plot_cfg, plot_cfg["panel_letters"][5], y_limits=shared_y_limits)
     fig.subplots_adjust(**plot_cfg["subplot"])
     fig.savefig(destination, dpi=config["output"]["png_dpi"] if destination.suffix.lower() == ".png" else None)
     plt.close(fig)
