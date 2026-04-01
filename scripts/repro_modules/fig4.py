@@ -353,6 +353,29 @@ def build_quantile_grid(values: np.ndarray, limits: tuple[float, float], n_point
         return build_linear_grid(limits, n_points)
     return grid
 
+def build_representative_one_d_grid(values: np.ndarray, limits: tuple[float, float], n_points: int) -> np.ndarray:
+    """Use a compact set of supported anchors so 1D PDP curves stay readable."""
+    lo = float(limits[0])
+    hi = float(limits[1])
+    if values.size == 0:
+        return build_linear_grid(limits, min(int(n_points), 12))
+    clipped = values[(values >= lo) & (values <= hi)]
+    if clipped.size == 0:
+        return build_linear_grid(limits, min(int(n_points), 12))
+    unique_values = np.unique(clipped.astype(float))
+    # For low-cardinality variables such as pH/temperature, keep the observed values.
+    if unique_values.size <= 24:
+        return unique_values
+    anchor_count = min(max(int(n_points), 8), 16)
+    quantiles = np.linspace(0.05, 0.95, max(anchor_count - 2, 2), dtype=float)
+    anchor_grid = np.quantile(clipped, quantiles)
+    grid = np.concatenate(([float(np.min(clipped))], anchor_grid.astype(float), [float(np.max(clipped))]))
+    grid = np.clip(grid, lo, hi)
+    grid = np.unique(grid.astype(float))
+    if grid.size < 2:
+        return build_linear_grid(limits, min(int(n_points), 12))
+    return grid
+
 def build_one_d_grid(
     training_df: pd.DataFrame,
     feature_name: str,
@@ -360,7 +383,7 @@ def build_one_d_grid(
     n_points: int,
 ) -> np.ndarray:
     values = compute_rug_values(training_df, feature_name, limits)
-    return build_quantile_grid(values, limits, n_points)
+    return build_representative_one_d_grid(values, limits, n_points)
 
 def compute_one_d_panel(
     predictor: Pipeline,
@@ -527,8 +550,11 @@ def infer_y_limits(curve: np.ndarray, panel_cfg: dict[str, Any]) -> tuple[float,
     return y_min - padding * 0.35, y_max + padding * 0.15
 
 def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, Any], plot_cfg: dict[str, Any], letter: str) -> None:
-    ax.step(panel.x, panel.y, where="mid", color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
-    ax.set_xlim(float(np.min(panel.x)), float(np.max(panel.x)))
+    # Draw unsmoothed polylines over representative PDP anchors; this keeps the
+    # empirical segmented feel without the visual artifacts caused by mid-step
+    # transitions on highly irregular grids.
+    ax.plot(panel.x, panel.y, color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
+    ax.set_xlim(float(panel_cfg["xlim"][0]), float(panel_cfg["xlim"][1]))
     ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
     ax.set_xlabel(panel_cfg["xlabel"])
     ax.set_ylabel(panel_cfg["ylabel"])
