@@ -42,7 +42,7 @@ def pick_display_config(metric_frames: dict[str, object]) -> str:
 def pick_shap_tree_model(best_model_name: str, ranked_models: pd.DataFrame) -> str:
     """Use the current best model when it is tree-based, otherwise fall back to the
     highest-ranked tree model so TreeExplainer stays valid."""
-    tree_models = {"RF", "GBDT", "XGB"}
+    tree_models = {"RF", "GBDT", "XGB", "CatBoost", "ExtraTree", "DecisionTree", "LightGBM"}
     if best_model_name in tree_models:
         return best_model_name
     ranked_names = ranked_models["model"].tolist() if "model" in ranked_models.columns else []
@@ -50,6 +50,64 @@ def pick_shap_tree_model(best_model_name: str, ranked_models: pd.DataFrame) -> s
         if model_name in tree_models:
             return model_name
     return "XGB"
+
+
+def sort_metric_frame(metrics: pd.DataFrame) -> pd.DataFrame:
+    return metrics.sort_values(["r2", "rmse", "mae"], ascending=[False, True, True]).reset_index(drop=True)
+
+
+def build_formal_model_ranking(
+    display_config: str,
+    base_best_df: pd.DataFrame,
+    base_metrics: pd.DataFrame,
+    additional_metrics: pd.DataFrame,
+    base_params: dict[str, dict[str, object]],
+    additional_params: dict[str, dict[str, object]],
+    *,
+    enable_tuning: bool,
+    row_count: int,
+) -> pd.DataFrame:
+    base_lookup = base_best_df.set_index("model")
+    combined_metrics = sort_metric_frame(pd.concat([base_metrics, additional_metrics], ignore_index=True))
+    rows: list[dict[str, object]] = []
+
+    for metric_row in combined_metrics.itertuples(index=False):
+        model_name = str(metric_row.model)
+        params = base_params.get(model_name, additional_params.get(model_name, {}))
+        row = {
+            "model": model_name,
+            "params_json": json.dumps(params, sort_keys=True),
+            "selection_config": display_config,
+            "oof_r2": float(metric_row.r2),
+            "oof_mae": float(metric_row.mae),
+            "oof_rmse": float(metric_row.rmse),
+        }
+        if model_name in base_lookup.index:
+            base_row = base_lookup.loc[model_name]
+            row.update(
+                {
+                    "mean_r2": float(base_row.get("mean_r2", np.nan)),
+                    "std_r2": float(base_row.get("std_r2", np.nan)),
+                    "mean_mae": float(base_row.get("mean_mae", np.nan)),
+                    "mean_rmse": float(base_row.get("mean_rmse", np.nan)),
+                    "cv_strategy": str(base_row.get("cv_strategy", "unknown")),
+                    "cv_folds": int(base_row.get("cv_folds", 1)),
+                }
+            )
+        else:
+            row.update(
+                {
+                    "mean_r2": float(getattr(metric_row, "cv_mean_r2", np.nan)),
+                    "std_r2": float(getattr(metric_row, "cv_std_r2", np.nan)),
+                    "mean_mae": float(getattr(metric_row, "cv_mean_mae", np.nan)),
+                    "mean_rmse": float(getattr(metric_row, "cv_mean_rmse", np.nan)),
+                    "cv_strategy": "rowwise_kfold_train_only" if enable_tuning else "fixed_holdout_no_tuning",
+                    "cv_folds": int(choose_row_cv_splits(row_count)) if enable_tuning else 1,
+                }
+            )
+        rows.append(row)
+
+    return pd.DataFrame(rows)
 
 
 def render_all_model_fig5s(
@@ -104,7 +162,7 @@ def run_reproduction(
         ),
     ]
 
-    metric_frames: dict[str, object] = {}
+    base_metric_frames: dict[str, object] = {}
     prediction_frames: dict[str, object] = {}
     split_pipes: dict[str, object] = {}
     prepared_splits: dict[str, object] = {}
@@ -119,60 +177,82 @@ def run_reproduction(
         display_training_raw,
         enable_tuning=enable_tuning,
     )
-    tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
-    best_model_name = str(cv_best_df.iloc[0]["model"])
-    if not fig3_only:
-        strict_group_cv_summary, strict_group_cv_folds, strict_group_cv_groups = evaluate_models_with_group_cv(
-            display_training_raw,
-            tuned_params,
-            model_names=[best_model_name],
-        )
-        strict_group_cv_summary.to_csv(OUTPUT_DIR / "strict_group_cv_summary.csv", index=False)
-        strict_group_cv_folds.to_csv(OUTPUT_DIR / "strict_group_cv_fold_metrics.csv", index=False)
-        strict_group_cv_groups.to_csv(OUTPUT_DIR / "strict_group_cv_group_metrics.csv", index=False)
-        write_group_cv_report(display_training_raw, strict_group_cv_summary, strict_group_cv_groups)
+    base_tuned_params = {row.model: json.loads(row.params_json) for row in cv_best_df.itertuples(index=False)}
 
     for config in configs:
         raw_training_df = load_training_table(config.descriptor_preset, config.mod_encoding, config.group_recipe)
-        metrics, predictions, fitted, prepared_split = fit_models_for_split(raw_training_df, config, tuned_params)
-        metric_frames[config.name] = metrics
+        metrics, predictions, fitted, prepared_split = fit_models_for_split(raw_training_df, config, base_tuned_params)
+        base_metric_frames[config.name] = metrics
         prediction_frames[config.name] = predictions
         split_pipes[config.name] = fitted
         prepared_splits[config.name] = prepared_split
         metrics.to_csv(OUTPUT_DIR / f"model_metrics_{config.name}.csv", index=False)
 
+    metric_frames = dict(base_metric_frames)
     display_config = pick_display_config(metric_frames)
-    # Main-text Fig. 3
-    save_fig3_like(prediction_frames[display_config], metric_frames[display_config], "fig3_fitting_effect.png")
-    additional_metrics, additional_predictions, _, additional_tuned_params = fit_named_models_on_existing_split(
+    display_additional_metrics, display_additional_predictions, display_additional_split_pipes, display_additional_params = fit_named_models_on_existing_split(
         prepared_splits[display_config],
         configs[0] if display_config == "paper_faithful" else configs[1],
         ADDITIONAL_MODEL_ORDER,
         model_params=get_additional_model_params(),
         model_param_grids=get_additional_model_grids(),
         enable_tuning=enable_tuning,
-        tuning_cache_label="additional_model_search",
+        tuning_cache_label=f"additional_model_search_{display_config}",
     )
-    additional_metrics.to_csv(OUTPUT_DIR / "model_metrics_additional_models.csv", index=False)
+    display_combined_metrics = sort_metric_frame(pd.concat([base_metric_frames[display_config], display_additional_metrics], ignore_index=True))
+    metric_frames[display_config] = display_combined_metrics
+    display_combined_metrics.to_csv(OUTPUT_DIR / f"model_metrics_{display_config}.csv", index=False)
+    display_additional_metrics.to_csv(OUTPUT_DIR / "model_metrics_additional_models.csv", index=False)
+
+    all_tuned_params = {**base_tuned_params, **display_additional_params}
     additional_full_pipes = fit_named_models_on_full_training(
         display_training_df,
         ADDITIONAL_MODEL_ORDER,
-        additional_tuned_params,
-        cache_label="additional_models",
+        display_additional_params,
+        cache_label=f"additional_models_{display_config}",
     )
     all_full_pipes = {**tuned_full_pipes, **additional_full_pipes}
+    formal_best_df = build_formal_model_ranking(
+        display_config,
+        cv_best_df,
+        base_metric_frames[display_config],
+        display_additional_metrics,
+        base_tuned_params,
+        display_additional_params,
+        enable_tuning=enable_tuning,
+        row_count=len(display_training_df),
+    )
+    formal_best_df.to_csv(OUTPUT_DIR / "model_grid_search_best_per_model.csv", index=False)
+    formal_best_df.to_csv(OUTPUT_DIR / "model_grid_search_best_per_model_all_models.csv", index=False)
+
+    best_model_name = str(formal_best_df.iloc[0]["model"])
+    if not fig3_only:
+        strict_group_cv_summary, strict_group_cv_folds, strict_group_cv_groups = evaluate_models_with_group_cv(
+            display_training_raw,
+            all_tuned_params,
+            model_names=[best_model_name],
+        )
+        strict_group_cv_summary.to_csv(OUTPUT_DIR / "strict_group_cv_summary.csv", index=False)
+        strict_group_cv_folds.to_csv(OUTPUT_DIR / "strict_group_cv_fold_metrics.csv", index=False)
+        strict_group_cv_groups.to_csv(OUTPUT_DIR / "strict_group_cv_group_metrics.csv", index=False)
+        write_group_cv_report(display_training_raw, strict_group_cv_summary, strict_group_cv_groups)
+    # Main-text Fig. 3
+    combined_predictions = {**prediction_frames[display_config], **display_additional_predictions}
     save_fig3_like(
-        additional_predictions,
-        additional_metrics,
+        combined_predictions,
+        display_combined_metrics,
+        "fig3_fitting_effect.png",
+    )
+    save_fig3_like(
+        display_additional_predictions,
+        display_additional_metrics,
         "fig3_additional_model_fits.png",
         display_order=ADDITIONAL_MODEL_ORDER,
         caption_text="Fig. 3 (additional models). Fitting effect diagram of CatBoost, ExtraTree, HistGBDT, DecisionTree, Bagging, and LightGBM.",
     )
-    combined_metrics = pd.concat([metric_frames[display_config], additional_metrics], ignore_index=True)
-    combined_predictions = {**prediction_frames[display_config], **additional_predictions}
     save_fig3_like(
         combined_predictions,
-        combined_metrics,
+        display_combined_metrics,
         "fig3_all_model_fits.png",
         display_order=[*MODEL_ORDER, *ADDITIONAL_MODEL_ORDER],
         ncols=6,
@@ -187,12 +267,12 @@ def run_reproduction(
     target_core_df = build_target_core_feature_table(target_core_raw, "calibrated_mixed", display_training_df, "calibrated")
     target_core_df.to_csv(OUTPUT_DIR / "core_target_feature_table_selected_metals.csv", index=False)
 
-    second_model_name = cv_best_df.iloc[1]["model"]
+    second_model_name = str(formal_best_df.iloc[1]["model"])
     screening_mod_weights = get_screening_mod_weights(display_training_df)
     first_adsorption_df = make_first_adsorption_dataset(
         target_core_df,
         best_model_name,
-        tuned_full_pipes[best_model_name],
+        all_full_pipes[best_model_name],
         screening_mod_weights,
     )
     first_adsorption_df.to_csv(OUTPUT_DIR / "core_first_adsorption_dataset.csv", index=False)
@@ -201,19 +281,19 @@ def run_reproduction(
     second_adsorption_df = make_second_adsorption_dataset(
         initial_screening_df,
         second_model_name,
-        tuned_full_pipes[second_model_name],
+        all_full_pipes[second_model_name],
         screening_mod_weights,
     )
     second_adsorption_df.to_csv(OUTPUT_DIR / "second_adsorption_dataset.csv", index=False)
 
     feature_importance = compute_feature_importance_table(
-        tuned_full_pipes[best_model_name],
+        all_full_pipes[best_model_name],
         display_training_df,
         best_model_name,
     )
     fig2_workflow_counts = {
         "training_rows": len(display_training_raw),
-        "model_count": len(MODEL_ORDER),
+        "model_count": len(MODEL_ORDER) + len(ADDITIONAL_MODEL_ORDER),
         "candidate_rows": len(target_core_df),
         "initial_rows": len(initial_screening_df),
     }
@@ -231,7 +311,7 @@ def run_reproduction(
     permutation_summary, permutation_detail = compute_repeated_permutation_importance(
         display_training_raw,
         best_model_name,
-        tuned_params[best_model_name],
+        all_tuned_params[best_model_name],
         n_splits=5,
         test_size=0.1,
         perm_repeats=20,
@@ -245,14 +325,14 @@ def run_reproduction(
     save_figS1_quantitative_distributions(display_training_raw, "figS1_quantitative_distributions.png")
     save_figS2_qualitative_distributions(display_training_raw, "figS2_qualitative_distributions.png")
     save_figS3_correlation_heatmap(display_training_raw, "figS3_correlation_heatmap.png")
-    save_figS4_learning_curve(display_training_raw, best_model_name, tuned_params[best_model_name], "figS4_learning_curve.png")
+    save_figS4_learning_curve(display_training_raw, best_model_name, all_tuned_params[best_model_name], "figS4_learning_curve.png")
     # Main-text Fig. 4 and Fig. 5
     render_fig4_artifacts(
         ROOT / "config" / "fig4_config.json",
         raw_training_df=display_training_raw,
         cv_results=cv_results_df,
-        best_per_model=cv_best_df,
-        fitted_models=tuned_full_pipes,
+        best_per_model=formal_best_df,
+        fitted_models=all_full_pipes,
         prepared_training_df=display_training_df,
     )
     save_fig5_like(first_adsorption_df, "fig5_structure_relationships.png")
@@ -262,11 +342,11 @@ def run_reproduction(
     if not skip_supplementary:
         # Supplementary Fig. S5 and Fig. S6
         test_df = prepared_splits[display_config]["test"].copy()
-        shap_model_name = pick_shap_tree_model(best_model_name, cv_best_df)
+        shap_model_name = pick_shap_tree_model(best_model_name, formal_best_df)
         save_combined_supplementary_figures(
-            tuned_full_pipes[shap_model_name],
+            all_full_pipes[shap_model_name],
             display_training_df,
-            split_pipes[display_config][shap_model_name],
+            ({**split_pipes[display_config], **display_additional_split_pipes})[shap_model_name],
             test_df,
             "figS5_beeswarm.png",
             "figS6_waterfall.png",
@@ -274,7 +354,7 @@ def run_reproduction(
 
     write_summary(
         metric_frames,
-        cv_best_df,
+        formal_best_df,
         first_adsorption_df,
         initial_screening_df,
         second_adsorption_df,

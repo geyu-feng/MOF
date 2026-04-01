@@ -660,7 +660,8 @@ def evaluate_models_with_group_cv(
     unique_group_count = int(groups.nunique())
     n_splits = choose_row_cv_splits(row_count) if n_splits is None else min(row_count, int(n_splits))
     splitter = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    active_models = MODEL_ORDER if model_names is None else [name for name in model_names if name in MODEL_ORDER]
+    known_models = [*MODEL_ORDER, *ADDITIONAL_MODEL_ORDER]
+    active_models = known_models if model_names is None else [name for name in model_names if name in known_models]
 
     summary_rows: list[dict[str, object]] = []
     fold_rows: list[dict[str, object]] = []
