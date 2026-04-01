@@ -183,8 +183,8 @@ def save_fig3_like(
         test_df = predictions[model_name]["test"]
         combined = pd.concat([train_df, test_df], ignore_index=True)
         max_v = max(250.0, combined[["actual_q", "predicted_q"]].to_numpy().max() * 1.02)
-        ax.scatter(train_df["predicted_q"], train_df["actual_q"], s=8, c="#5dd18a", alpha=0.7, label="Train", edgecolors="none")
-        ax.scatter(test_df["predicted_q"], test_df["actual_q"], s=8, c="#0b5d1e", alpha=0.85, label="Test", edgecolors="none")
+        ax.scatter(train_df["predicted_q"], train_df["actual_q"], s=8, c="#f6cae5", alpha=0.7, label="Train", edgecolors="none")
+        ax.scatter(test_df["predicted_q"], test_df["actual_q"], s=8, c="#c4a5de", alpha=0.85, label="Test", edgecolors="none")
         ax.plot([0, max_v], [0, max_v], color="#e67e22", linewidth=0.9, linestyle="--")
         ax.set_xlim(0, max_v)
         ax.set_ylim(0, max_v)
