@@ -418,7 +418,7 @@ def build_one_d_grid(
                 supported = downsample_sorted_values(np.sort(supported.astype(float)), max_display_points)
             return supported
     if grid_mode == "quantile":
-        grid = build_representative_one_d_grid(values, limits, min(int(n_points), max_display_points or int(n_points)))
+        grid = build_representative_one_d_grid(values, limits, int(n_points))
         if max_display_points > 0:
             grid = downsample_sorted_values(np.sort(grid.astype(float)), max_display_points)
         return grid
@@ -606,8 +606,6 @@ def plot_one_d_panel(
     panel_cfg: dict[str, Any],
     plot_cfg: dict[str, Any],
     letter: str,
-    *,
-    y_limits: tuple[float, float] | None = None,
 ) -> None:
     # Draw unsmoothed polylines over representative PDP anchors; this keeps the
     # empirical segmented feel without the visual artifacts caused by mid-step
@@ -616,7 +614,7 @@ def plot_one_d_panel(
     ax.set_xlim(float(np.min(panel.x)), float(np.max(panel.x)))
     if "x_scale" in panel_cfg:
         ax.set_xscale(panel_cfg["x_scale"])
-    ax.set_ylim(*(y_limits or infer_y_limits(panel.y, panel_cfg)))
+    ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
     ax.set_xlabel(panel_cfg["xlabel"])
     ax.set_ylabel(panel_cfg["ylabel"])
     ax.set_title(letter, pad=2)
@@ -629,16 +627,12 @@ def plot_fig4(bundle: Fig4DataBundle, config: dict[str, Any], destination: Path)
     set_paper_rcparams()
     plot_cfg = config["plot"]
     fig, axes = plt.subplots(2, 3, figsize=tuple(plot_cfg["figure_size"]))
-    shared_y_limits = infer_shared_y_limits(
-        [bundle.one_d["ci"], bundle.one_d["ad"], bundle.one_d["time"], bundle.one_d["ph"], bundle.one_d["temp"]],
-        [config["panels"]["ci"], config["panels"]["ad"], config["panels"]["time"], config["panels"]["ph"], config["panels"]["temp"]],
-    )
     plot_two_d_panel(axes[0, 0], bundle.two_d, config["panels"]["ci_ad"], plot_cfg, plot_cfg["panel_letters"][0])
-    plot_one_d_panel(axes[0, 1], bundle.one_d["ci"], config["panels"]["ci"], plot_cfg, plot_cfg["panel_letters"][1], y_limits=shared_y_limits)
-    plot_one_d_panel(axes[0, 2], bundle.one_d["ad"], config["panels"]["ad"], plot_cfg, plot_cfg["panel_letters"][2], y_limits=shared_y_limits)
-    plot_one_d_panel(axes[1, 0], bundle.one_d["time"], config["panels"]["time"], plot_cfg, plot_cfg["panel_letters"][3], y_limits=shared_y_limits)
-    plot_one_d_panel(axes[1, 1], bundle.one_d["ph"], config["panels"]["ph"], plot_cfg, plot_cfg["panel_letters"][4], y_limits=shared_y_limits)
-    plot_one_d_panel(axes[1, 2], bundle.one_d["temp"], config["panels"]["temp"], plot_cfg, plot_cfg["panel_letters"][5], y_limits=shared_y_limits)
+    plot_one_d_panel(axes[0, 1], bundle.one_d["ci"], config["panels"]["ci"], plot_cfg, plot_cfg["panel_letters"][1])
+    plot_one_d_panel(axes[0, 2], bundle.one_d["ad"], config["panels"]["ad"], plot_cfg, plot_cfg["panel_letters"][2])
+    plot_one_d_panel(axes[1, 0], bundle.one_d["time"], config["panels"]["time"], plot_cfg, plot_cfg["panel_letters"][3])
+    plot_one_d_panel(axes[1, 1], bundle.one_d["ph"], config["panels"]["ph"], plot_cfg, plot_cfg["panel_letters"][4])
+    plot_one_d_panel(axes[1, 2], bundle.one_d["temp"], config["panels"]["temp"], plot_cfg, plot_cfg["panel_letters"][5])
     fig.subplots_adjust(**plot_cfg["subplot"])
     fig.savefig(destination, dpi=config["output"]["png_dpi"] if destination.suffix.lower() == ".png" else None)
     plt.close(fig)
