@@ -366,6 +366,15 @@ def build_representative_one_d_grid(values: np.ndarray, limits: tuple[float, flo
     # For low-cardinality variables such as pH/temperature, keep the observed values.
     if unique_values.size <= 24:
         return unique_values
+    # Trim very sparse upper tails so a few extreme observations do not distort the
+    # visible 1D PDP panels. This keeps the displayed x-range focused on the
+    # data-rich region while still avoiding smoothing.
+    q95 = float(np.quantile(clipped, 0.95))
+    if q95 > lo and float(np.max(clipped)) > q95 * 1.2:
+        clipped = clipped[clipped <= q95]
+        unique_values = np.unique(clipped.astype(float))
+        if unique_values.size <= 24:
+            return unique_values
     anchor_count = min(max(int(n_points), 8), 16)
     quantiles = np.linspace(0.05, 0.95, max(anchor_count - 2, 2), dtype=float)
     anchor_grid = np.quantile(clipped, quantiles)
@@ -394,14 +403,14 @@ def compute_one_d_panel(
     panel_cfg: dict[str, Any],
 ) -> OneDPanelData:
     grid = build_one_d_grid(training_df, feature_name, tuple(panel_cfg["xlim"]), panel_cfg["n_points"])
-    point_curve = compute_partial_dependence_1d(predictor, base_frame, feature_name, grid)
     ensemble_curves = [compute_partial_dependence_1d(model, base_frame, feature_name, grid) for model in ensemble]
-    _, y_std, y_q05, y_q95 = summarize_ensemble_curves(ensemble_curves)
-    rug_values = compute_rug_values(training_df, feature_name, tuple(panel_cfg["xlim"]))
+    y_mean, y_std, y_q05, y_q95 = summarize_ensemble_curves(ensemble_curves)
+    rug_limits = (float(np.min(grid)), float(np.max(grid)))
+    rug_values = compute_rug_values(training_df, feature_name, rug_limits)
     return OneDPanelData(
         feature_name=feature_name,
         x=grid,
-        y=point_curve,
+        y=y_mean,
         rug_values=rug_values,
         y_std=y_std,
         y_q05=y_q05,
@@ -554,7 +563,7 @@ def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, An
     # empirical segmented feel without the visual artifacts caused by mid-step
     # transitions on highly irregular grids.
     ax.plot(panel.x, panel.y, color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
-    ax.set_xlim(float(panel_cfg["xlim"][0]), float(panel_cfg["xlim"][1]))
+    ax.set_xlim(float(np.min(panel.x)), float(np.max(panel.x)))
     ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
     ax.set_xlabel(panel_cfg["xlabel"])
     ax.set_ylabel(panel_cfg["ylabel"])
