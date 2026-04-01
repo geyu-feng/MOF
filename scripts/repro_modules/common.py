@@ -9,6 +9,7 @@ import shutil
 import warnings
 import zipfile
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Iterable
@@ -61,6 +62,13 @@ PRIMARY_DATA_XLSX = ROOT / "11.xlsx"
 
 OUTPUT_DIR = ROOT / "outputs"
 DEFAULT_SPLIT_SEED = 10
+CORE_CR_ASR_DIR = (
+    ROOT
+    / "CoREMOF2019_public_v2_20241119"
+    / "CoREMOF2019_public_v2_20241118"
+    / "CR"
+    / "ASR"
+)
 
 RAW_COLUMN_MAP = {
     "Coordination metal": "metal",
@@ -879,5 +887,38 @@ def build_target_core_feature_table(
     ]
     out = out[ordered_columns].dropna(subset=required_columns).reset_index(drop=True)
     return out
+
+
+def _normalize_core_cif_name(value: str) -> str:
+    name = Path(str(value).strip()).name
+    stem = Path(name).stem
+    if stem.endswith("_pacman"):
+        stem = stem[: -len("_pacman")]
+    return stem
+
+
+@lru_cache(maxsize=1)
+def get_cr_asr_available_cif_names() -> set[str]:
+    if not CORE_CR_ASR_DIR.exists():
+        raise FileNotFoundError(CORE_CR_ASR_DIR)
+    return {
+        _normalize_core_cif_name(path.name)
+        for path in CORE_CR_ASR_DIR.glob("*.cif")
+    }
+
+
+def filter_core_candidates_to_cr_asr(core_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Keep only candidate rows whose CIF file is physically present in the
+    CoREMOF2019_public CR/ASR directory.
+    """
+    available = get_cr_asr_available_cif_names()
+    out = core_df.copy()
+    normalized = out["cif_file"].map(_normalize_core_cif_name)
+    mask = normalized.isin(available)
+    out = out.loc[mask].copy()
+    out["cr_asr_cif"] = normalized.loc[out.index].map(lambda stem: f"{stem}_pacman.cif")
+    out["cr_asr_cif_path"] = out["cr_asr_cif"].map(lambda name: str(CORE_CR_ASR_DIR / name))
+    return out.reset_index(drop=True)
 
 

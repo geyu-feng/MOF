@@ -286,6 +286,27 @@ def run_reproduction(
     )
     second_adsorption_df.to_csv(OUTPUT_DIR / "second_adsorption_dataset.csv", index=False)
 
+    # Extra export branch: only keep candidates whose CIF files are present in
+    # the public CoREMOF2019 CR/ASR directory, then rerun the two-stage ranking.
+    target_core_df_cr_asr = filter_core_candidates_to_cr_asr(target_core_df)
+    target_core_df_cr_asr.to_csv(OUTPUT_DIR / "core_target_feature_table_selected_metals_cr_asr.csv", index=False)
+    first_adsorption_df_cr_asr = make_first_adsorption_dataset(
+        target_core_df_cr_asr,
+        best_model_name,
+        all_full_pipes[best_model_name],
+        screening_mod_weights,
+    )
+    first_adsorption_df_cr_asr.to_csv(OUTPUT_DIR / "core_first_adsorption_dataset_cr_asr.csv", index=False)
+    initial_screening_df_cr_asr = build_initial_screening_from_first_dataset(first_adsorption_df_cr_asr, top_n=10)
+    initial_screening_df_cr_asr.to_csv(OUTPUT_DIR / "initial_screening_generated_cr_asr.csv", index=False)
+    second_adsorption_df_cr_asr = make_second_adsorption_dataset(
+        initial_screening_df_cr_asr,
+        second_model_name,
+        all_full_pipes[second_model_name],
+        screening_mod_weights,
+    )
+    second_adsorption_df_cr_asr.to_csv(OUTPUT_DIR / "second_adsorption_dataset_cr_asr.csv", index=False)
+
     feature_importance = compute_feature_importance_table(
         all_full_pipes[best_model_name],
         display_training_df,
