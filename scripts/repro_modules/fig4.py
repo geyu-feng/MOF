@@ -385,22 +385,43 @@ def build_representative_one_d_grid(values: np.ndarray, limits: tuple[float, flo
         return build_linear_grid(limits, min(int(n_points), 12))
     return grid
 
+def downsample_sorted_values(values: np.ndarray, max_points: int) -> np.ndarray:
+    if values.size <= max_points:
+        return values
+    idx = np.linspace(0, values.size - 1, int(max_points), dtype=int)
+    return np.unique(values[idx].astype(float))
+
 def build_one_d_grid(
     training_df: pd.DataFrame,
     feature_name: str,
     limits: tuple[float, float],
     n_points: int,
+    panel_cfg: dict[str, Any] | None = None,
 ) -> np.ndarray:
+    panel_cfg = panel_cfg or {}
     series = pd.to_numeric(training_df[feature_name], errors="coerce").dropna()
     lo, hi = float(limits[0]), float(limits[1])
     clipped_series = series[(series >= lo) & (series <= hi)]
     values = clipped_series.to_numpy(dtype=float)
     unique_values = np.unique(values.astype(float))
-    if 0 < unique_values.size <= 24:
+    grid_mode = str(panel_cfg.get("grid_mode", "auto")).lower()
+    discrete_min_count = int(panel_cfg.get("discrete_min_count", 3))
+    keep_endpoints = bool(panel_cfg.get("keep_endpoints", False))
+    max_display_points = int(panel_cfg.get("max_display_points", 0))
+    if grid_mode == "observed" or (grid_mode == "auto" and 0 < unique_values.size <= 24):
         counts = clipped_series.value_counts().sort_index()
-        supported = counts[counts >= 3].index.to_numpy(dtype=float)
+        supported = counts[counts >= discrete_min_count].index.to_numpy(dtype=float)
+        if keep_endpoints and unique_values.size > 0:
+            supported = np.unique(np.concatenate(([unique_values[0]], supported, [unique_values[-1]])))
         if supported.size >= 4:
+            if max_display_points > 0:
+                supported = downsample_sorted_values(np.sort(supported.astype(float)), max_display_points)
             return supported
+    if grid_mode == "quantile":
+        grid = build_representative_one_d_grid(values, limits, min(int(n_points), max_display_points or int(n_points)))
+        if max_display_points > 0:
+            grid = downsample_sorted_values(np.sort(grid.astype(float)), max_display_points)
+        return grid
     return build_representative_one_d_grid(values, limits, n_points)
 
 def compute_one_d_panel(
@@ -411,7 +432,7 @@ def compute_one_d_panel(
     feature_name: str,
     panel_cfg: dict[str, Any],
 ) -> OneDPanelData:
-    grid = build_one_d_grid(training_df, feature_name, tuple(panel_cfg["xlim"]), panel_cfg["n_points"])
+    grid = build_one_d_grid(training_df, feature_name, tuple(panel_cfg["xlim"]), panel_cfg["n_points"], panel_cfg)
     ensemble_curves = [compute_partial_dependence_1d(model, base_frame, feature_name, grid) for model in ensemble]
     y_mean, y_std, y_q05, y_q95 = summarize_ensemble_curves(ensemble_curves)
     rug_limits = (float(np.min(grid)), float(np.max(grid)))
@@ -573,6 +594,8 @@ def plot_one_d_panel(ax: plt.Axes, panel: OneDPanelData, panel_cfg: dict[str, An
     # transitions on highly irregular grids.
     ax.plot(panel.x, panel.y, color=plot_cfg["line_color"], linewidth=plot_cfg["line_width"], zorder=2)
     ax.set_xlim(float(np.min(panel.x)), float(np.max(panel.x)))
+    if "x_scale" in panel_cfg:
+        ax.set_xscale(panel_cfg["x_scale"])
     ax.set_ylim(*infer_y_limits(panel.y, panel_cfg))
     ax.set_xlabel(panel_cfg["xlabel"])
     ax.set_ylabel(panel_cfg["ylabel"])

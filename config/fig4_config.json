@@ -67,15 +67,15 @@
       "ylabel": "AD",
       "xlim": [
         0.0,
-        1000.0
+        600.0
       ],
       "ylim": [
         0.0,
-        2000.0
+        1500.0
       ],
       "x_points": 40,
       "y_points": 36,
-      "x_major_locator": 200.0,
+      "x_major_locator": 100.0,
       "y_major_locator": 500.0
     },
     "ci": {
@@ -106,11 +106,17 @@
       "xlabel": "Time",
       "ylabel": "Partial dependence",
       "xlim": [
-        0.0,
-        4000.0
+        0.6,
+        1440.0
       ],
       "n_points": 90,
-      "x_major_locator": 1000.0,
+      "x_scale": "log",
+      "x_ticks": [
+        1.0,
+        10.0,
+        100.0,
+        1000.0
+      ],
       "y_padding_fraction": 0.12,
       "y_min_pad": 0.8
     },
@@ -122,6 +128,8 @@
         12.0
       ],
       "n_points": 80,
+      "grid_mode": "quantile",
+      "max_display_points": 9,
       "x_ticks": [
         2.5,
         5.0,
@@ -135,10 +143,14 @@
       "xlabel": "Tem",
       "ylabel": "Partial dependence",
       "xlim": [
-        295.0,
+        298.0,
         340.0
       ],
       "n_points": 80,
+      "grid_mode": "observed",
+      "discrete_min_count": 1,
+      "keep_endpoints": true,
+      "max_display_points": 7,
       "x_ticks": [
         300.0,
         310.0,
