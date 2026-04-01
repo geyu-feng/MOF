@@ -391,7 +391,16 @@ def build_one_d_grid(
     limits: tuple[float, float],
     n_points: int,
 ) -> np.ndarray:
-    values = compute_rug_values(training_df, feature_name, limits)
+    series = pd.to_numeric(training_df[feature_name], errors="coerce").dropna()
+    lo, hi = float(limits[0]), float(limits[1])
+    clipped_series = series[(series >= lo) & (series <= hi)]
+    values = clipped_series.to_numpy(dtype=float)
+    unique_values = np.unique(values.astype(float))
+    if 0 < unique_values.size <= 24:
+        counts = clipped_series.value_counts().sort_index()
+        supported = counts[counts >= 3].index.to_numpy(dtype=float)
+        if supported.size >= 4:
+            return supported
     return build_representative_one_d_grid(values, limits, n_points)
 
 def compute_one_d_panel(
